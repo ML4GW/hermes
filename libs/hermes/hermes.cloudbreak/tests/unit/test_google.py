@@ -1,8 +1,7 @@
 import os
 
 import pytest
-
-from gravswell.cloudbreak.clouds import google as cb
+from hermes.cloudbreak.clouds import google as cb
 
 
 def test_cluster_manager(zone="us-central1-f"):

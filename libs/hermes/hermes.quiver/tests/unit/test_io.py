@@ -3,8 +3,7 @@ import shutil
 
 import pytest
 from google.api_core.exceptions import NotFound
-
-from gravswell.quiver.io import GCSFileSystem, LocalFileSystem
+from hermes.quiver.io import GCSFileSystem, LocalFileSystem
 
 
 def run_file_manipulations(fs):
@@ -53,7 +52,7 @@ def run_file_manipulations(fs):
 def test_local_filesytem():
     # create a local filesystem and
     # verify that it exists
-    dirname = "gravswell-quiver-test"
+    dirname = "hermes-quiver-test"
     fs = LocalFileSystem(dirname)
     assert os.path.isdir(dirname)
 
@@ -81,7 +80,7 @@ def test_local_filesytem():
 
 
 def test_gcs_filesystem():
-    bucket_name = "gravswell-quiver-test"
+    bucket_name = "hermes-quiver-test"
 
     # create the bucket file system and
     # run tests in a try-catch in case

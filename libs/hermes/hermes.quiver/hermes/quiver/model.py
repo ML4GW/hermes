@@ -2,14 +2,14 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Union
 
-from gravswell.quiver import Platform
-from gravswell.quiver.exporters import Exporter
-from gravswell.quiver.model_config import ModelConfig
+from hermes.quiver import Platform
+from hermes.quiver.exporters import Exporter
+from hermes.quiver.model_config import ModelConfig
 
 if TYPE_CHECKING:
-    from gravswell.quiver import ModelRepository
-    from gravswell.quiver.io.file_system import FileSystem
-    from gravswell.quiver.types import EXPOSED_TYPE, SHAPE_TYPE
+    from hermes.quiver import ModelRepository
+    from hermes.quiver.io.file_system import FileSystem
+    from hermes.quiver.types import EXPOSED_TYPE, SHAPE_TYPE
 
 
 @dataclass

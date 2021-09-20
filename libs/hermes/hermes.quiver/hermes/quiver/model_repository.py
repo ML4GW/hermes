@@ -1,6 +1,6 @@
 import re
 
-from gravswell.quiver import Model, Platform, io
+from hermes.quiver import Model, Platform, io
 
 
 class ModelRepository:

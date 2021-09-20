@@ -1,13 +1,12 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
+from hermes.quiver import Platform
 from tritonclient.grpc import model_config_pb2 as model_config
 
-from gravswell.quiver import Platform
-
 if TYPE_CHECKING:
-    from gravswell.quiver import Model
-    from gravswell.quiver.types import SHAPE_TYPE
+    from hermes.quiver import Model
+    from hermes.quiver.types import SHAPE_TYPE
 
 
 KIND_TYPE = Literal["auto", "cpu", "gpu"]

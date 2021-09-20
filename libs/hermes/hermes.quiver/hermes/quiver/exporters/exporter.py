@@ -3,13 +3,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
-from gravswell.quiver import conventions
-from gravswell.quiver.types import SHAPE_TYPE
+from hermes.quiver import conventions
+from hermes.quiver.types import SHAPE_TYPE
 
 if TYPE_CHECKING:
-    from gravswell.quiver import ModelConfig, Platform
-    from gravswell.quiver.io import FileSystem
-    from gravswell.quiver.types import EXPOSED_TYPE
+    from hermes.quiver import ModelConfig, Platform
+    from hermes.quiver.io import FileSystem
+    from hermes.quiver.types import EXPOSED_TYPE
 
 
 _SHAPES_TYPE = Union[Sequence[SHAPE_TYPE], dict[str, SHAPE_TYPE], None]

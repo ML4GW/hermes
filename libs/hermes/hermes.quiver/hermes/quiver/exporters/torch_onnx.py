@@ -10,8 +10,8 @@ try:
 except ImportError:
     _has_torch = False
 
-from gravswell.quiver import Platform
-from gravswell.quiver.exporters import Exporter
+from hermes.quiver import Platform
+from hermes.quiver.exporters import Exporter
 
 
 class TorchOnnxMeta(abc.ABCMeta):

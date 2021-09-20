@@ -7,18 +7,17 @@ from typing import TYPE_CHECKING, List, Optional
 import kubernetes
 import requests
 import yaml
-from urllib3.exceptions import MaxRetryError
-
-from gravswell.cloudbreak.kubernetes.base import (
+from hermes.cloudbreak.kubernetes.base import (
     DaemonSet,
     Deployment,
     Resource,
     Service,
 )
-from gravswell.cloudbreak.utils import snakeify
+from hermes.cloudbreak.utils import snakeify
+from urllib3.exceptions import MaxRetryError
 
 if TYPE_CHECKING:
-    from gravswell.cloudbreak.clouds.base.kubernetes import Cluster
+    from hermes.cloudbreak.clouds.base.kubernetes import Cluster
 
 
 class K8sApiClient:

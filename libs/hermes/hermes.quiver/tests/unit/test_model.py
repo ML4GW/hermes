@@ -2,9 +2,8 @@ import os
 import sys
 
 import pytest
-
-from gravswell.quiver import Model, Platform
-from gravswell.quiver.exporters import TorchOnnx
+from hermes.quiver import Model, Platform
+from hermes.quiver.exporters import TorchOnnx
 
 sys.path.insert(0, os.path.dirname(__file__))
 from utils import DummyRepo, IdentityModel  # noqa
@@ -14,9 +13,7 @@ def test_model():
     with DummyRepo() as repo:
         model = Model("test", repo, platform=Platform.ONNX)
 
-        assert os.path.exists(
-            os.path.join("gravswell-quiver-test", model.name)
-        )
+        assert os.path.exists(os.path.join("hermes-quiver-test", model.name))
         assert len(model.versions) == 0
         assert len(model.inputs) == 0
         assert len(model.outputs) == 0

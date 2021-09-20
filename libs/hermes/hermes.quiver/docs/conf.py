@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
-project = "gravswell.quiver"
+project = "hermes.quiver"
 copyright = "2021, Alec Gunny"
 author = "Alec Gunny"
 

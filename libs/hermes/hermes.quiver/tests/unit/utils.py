@@ -1,6 +1,5 @@
 import torch
-
-from gravswell.quiver.io import LocalFileSystem
+from hermes.quiver.io import LocalFileSystem
 
 
 class IdentityModel(torch.nn.Module):
@@ -18,7 +17,7 @@ class DummyRepo:
         self.fs = None
 
     def __enter__(self):
-        self.fs = self.fs_type("gravswell-quiver-test")
+        self.fs = self.fs_type("hermes-quiver-test")
         return self
 
     def __exit__(self, *exc_args):

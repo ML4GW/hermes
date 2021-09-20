@@ -3,14 +3,14 @@ Reference
 
 Model Config
 ------------
-.. automodule:: gravswell.quiver.model_config
+.. automodule:: hermes.quiver.model_config
     :members:
 
 
 IO
 --
-.. automodule:: gravswell.quiver.io.local
+.. automodule:: hermes.quiver.io.local
     :members:
 
-.. automodule:: gravswell.quiver.io.gcs
+.. automodule:: hermes.quiver.io.gcs
     :members:

@@ -6,7 +6,7 @@ from google.protobuf import text_format
 from tritonclient.grpc.model_config_pb2 import ModelConfig
 
 if TYPE_CHECKING:
-    from gravswell.types import IO_TYPE
+    from hermes.types import IO_TYPE
 
 
 @dataclass

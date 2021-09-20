@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 
 import pytest
+from hermes.quiver import ModelConfig, Platform
+from hermes.quiver.io import FileSystem, GCSFileSystem, LocalFileSystem
 from tritonclient.grpc.model_config_pb2 import ModelInstanceGroup
-
-from gravswell.quiver import ModelConfig, Platform
-from gravswell.quiver.io import FileSystem, GCSFileSystem, LocalFileSystem
 
 
 @dataclass
@@ -18,7 +17,7 @@ class DummyModel:
 # TODO: parametrize the root level
 @pytest.mark.parametrize("fs_type", [LocalFileSystem, GCSFileSystem])
 def test_model_config(fs_type):
-    fs = fs_type("gravswell-quiver-test")
+    fs = fs_type("hermes-quiver-test")
     fs.soft_makedirs(DummyModel.name)
 
     try:

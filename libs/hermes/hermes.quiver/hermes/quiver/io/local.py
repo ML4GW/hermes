@@ -4,11 +4,11 @@ import shutil
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
-from gravswell.quiver.io.exceptions import NoFilesFoundError
-from gravswell.quiver.io.file_system import FileSystem
+from hermes.quiver.io.exceptions import NoFilesFoundError
+from hermes.quiver.io.file_system import FileSystem
 
 if TYPE_CHECKING:
-    from gravswell.types import IO_TYPE
+    from hermes.types import IO_TYPE
 
 
 @dataclass

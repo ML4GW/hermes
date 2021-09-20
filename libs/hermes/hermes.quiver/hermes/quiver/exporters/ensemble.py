@@ -1,8 +1,8 @@
 import abc
 from typing import Optional
 
-from gravswell.quiver import Platform
-from gravswell.quiver.exporters import Exporter
+from hermes.quiver import Platform
+from hermes.quiver.exporters import Exporter
 
 
 class EnsembleMeta(abc.ABCMeta):

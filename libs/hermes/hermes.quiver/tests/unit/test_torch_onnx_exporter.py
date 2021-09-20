@@ -2,10 +2,9 @@ import os
 import sys
 
 import pytest
-
-from gravswell.quiver import Model, Platform
-from gravswell.quiver.exporters import TorchOnnx
-from gravswell.quiver.io import GCSFileSystem, LocalFileSystem
+from hermes.quiver import Model, Platform
+from hermes.quiver.exporters import TorchOnnx
+from hermes.quiver.io import GCSFileSystem, LocalFileSystem
 
 sys.path.insert(0, os.path.dirname(__file__))
 from utils import DummyRepo, IdentityModel  # noqa
@@ -37,7 +36,7 @@ def test_torch_onnx_exporter(fs_type):
         assert model.config.output[0].name == "y"
         assert model.config.output[0].dims[0] == -1
 
-        version_path = repo.fs.join("gravswell-quiver-test", "identity", "1")
+        version_path = repo.fs.join("hermes-quiver-test", "identity", "1")
         repo.fs.soft_makedirs(version_path)
 
         output_path = os.path.join(version_path, "model.onnx")

@@ -5,13 +5,12 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import kubernetes
+from hermes.cloudbreak.utils import snakeify, wait_for
 from kubernetes.utils.create_from_yaml import FailToCreateError
 from urllib3.exceptions import MaxRetryError
 
-from gravswell.cloudbreak.utils import snakeify, wait_for
-
 if TYPE_CHECKING:
-    from gravswell.cloudbreak.kubernetes import K8sApiClient
+    from hermes.cloudbreak.kubernetes import K8sApiClient
 
 
 @dataclass

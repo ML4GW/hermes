@@ -3,9 +3,9 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from gravswell.cloudbreak.kubernetes import K8sApiClient
-from gravswell.cloudbreak.kubernetes.base import DaemonSet, Deployment, Service
-from gravswell.cloudbreak.utils import snakeify, wait_for
+from hermes.cloudbreak.kubernetes import K8sApiClient
+from hermes.cloudbreak.kubernetes.base import DaemonSet, Deployment, Service
+from hermes.cloudbreak.utils import snakeify, wait_for
 
 
 @dataclass

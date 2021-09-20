@@ -10,11 +10,11 @@ try:
 except ImportError:
     _has_google_libs = False
 
-from gravswell.quiver.io.exceptions import NoFilesFoundError
-from gravswell.quiver.io.file_system import FileSystem
+from hermes.quiver.io.exceptions import NoFilesFoundError
+from hermes.quiver.io.file_system import FileSystem
 
 if TYPE_CHECKING:
-    from gravswell.quiver.types import IO_TYPE
+    from hermes.quiver.types import IO_TYPE
 
 
 @dataclass
