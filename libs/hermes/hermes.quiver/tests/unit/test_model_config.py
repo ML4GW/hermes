@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
 import pytest
+from tritonclient.grpc.model_config_pb2 import ModelInstanceGroup
+
 from hermes.quiver import ModelConfig, Platform
 from hermes.quiver.io import FileSystem, GCSFileSystem, LocalFileSystem
-from tritonclient.grpc.model_config_pb2 import ModelInstanceGroup
 
 
 @dataclass

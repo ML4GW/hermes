@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
-from hermes.quiver import Platform
 from tritonclient.grpc import model_config_pb2 as model_config
+
+from hermes.quiver import Platform
 
 if TYPE_CHECKING:
     from hermes.quiver import Model

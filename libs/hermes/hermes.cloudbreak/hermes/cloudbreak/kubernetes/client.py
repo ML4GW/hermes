@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, List, Optional
 import kubernetes
 import requests
 import yaml
+from urllib3.exceptions import MaxRetryError
+
 from hermes.cloudbreak.kubernetes.base import (
     DaemonSet,
     Deployment,
@@ -14,7 +16,6 @@ from hermes.cloudbreak.kubernetes.base import (
     Service,
 )
 from hermes.cloudbreak.utils import snakeify
-from urllib3.exceptions import MaxRetryError
 
 if TYPE_CHECKING:
     from hermes.cloudbreak.clouds.base.kubernetes import Cluster
