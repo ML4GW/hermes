@@ -337,13 +337,14 @@ class EnsembleModel(Model):
         # so that TensorFlow doesn't become a mandatory
         # dependency of the library
         try:
-            from exportlib.stream import make_streaming_input_model
+            from hermes.quiver.streaming import make_streaming_input_model
         except ImportError as e:
             if "tensorflow" in str(e):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
                     "must install TensorFlow first"
                 )
+            raise
 
         # add a streaming model to the repository
         # and set up its config with the correct
@@ -355,7 +356,7 @@ class EnsembleModel(Model):
         # add the streaming model's input as an input
         # to this ensemble model.
         # TODO: should we include some sort of optional key
-        self.add_input(streaming_model.inputs["stream"])
+        streaming_input = self.add_input(streaming_model.inputs["stream"])
 
         # pipe the output of this streaming model to
         # each one of the corresponding inputs. Include
@@ -363,14 +364,14 @@ class EnsembleModel(Model):
         # the channel axis each one of these lies
         metadata = []
         for tensor, output in zip(inputs, streaming_model.outputs):
-            self.pipe(streaming_model.outputs[output.name], tensor)
+            self.pipe(streaming_model.outputs[output], tensor)
             metadata.append(f"{tensor.model.name}/{tensor.name}")
         self.config.parameters["states"].string_value = ",".join(metadata)
 
         # return the streaming model we created
         # TODO: better to return the "stream" input
         # of this model to be more consistent with `add_input`?
-        return streaming_model
+        return streaming_input
 
     def pipe(
         self,
@@ -379,11 +380,12 @@ class EnsembleModel(Model):
         key: Optional[str] = None,
     ) -> None:
         # verify that we're connecting tensors of the same shape
-        if not outbound.shape == inbound.shape:
-            raise ValueError(
-                f"Outbound tensor has shape {outbound.shape} which doesn't "
-                f"match shape of inbound tensor {inbound.shape}"
-            )
+        for dim1, dim2 in zip(outbound.shape, inbound.shape):
+            if dim1 != dim2 and not (dim1 is None or dim2 is None):
+                raise ValueError(
+                    f"Outbound tensor has shape {outbound.shape} which "
+                    f"doesn't match shape of inbound tensor {inbound.shape}"
+                )
 
         # add the models associated with the
         # inbound and outbound tensors to the
