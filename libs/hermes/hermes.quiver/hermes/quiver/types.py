@@ -1,5 +1,5 @@
-import typing
+from typing import Literal, Optional, Tuple, Union
 
-IO_TYPE = typing.Union[str, bytes]
-SHAPE_TYPE = tuple[typing.Optional[int], ...]
-EXPOSED_TYPE = typing.Literal["input", "output"]
+IO_TYPE = Union[str, bytes]
+SHAPE_TYPE = Tuple[Optional[int], ...]
+EXPOSED_TYPE = Literal["input", "output"]
