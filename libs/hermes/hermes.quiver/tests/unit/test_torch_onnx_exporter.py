@@ -8,12 +8,12 @@ from hermes.quiver.exporters import TorchOnnx
 from hermes.quiver.io import GCSFileSystem, LocalFileSystem
 
 sys.path.insert(0, os.path.dirname(__file__))
-from utils import DummyRepo, IdentityModel  # noqa
+from utils import DummyRepo, IdentityTorchModel  # noqa
 
 
 @pytest.mark.parametrize("fs_type", [LocalFileSystem, GCSFileSystem])
 def test_torch_onnx_exporter(fs_type):
-    model_fn = IdentityModel()
+    model_fn = IdentityTorchModel()
 
     with DummyRepo(fs_type) as repo:
         model = Model("identity", repo, Platform.ONNX)
@@ -40,7 +40,7 @@ def test_torch_onnx_exporter(fs_type):
         version_path = repo.fs.join("hermes-quiver-test", "identity", "1")
         repo.fs.soft_makedirs(version_path)
 
-        output_path = os.path.join(version_path, "model.onnx")
+        output_path = repo.fs.join(version_path, "model.onnx")
 
         exporter.export(model_fn, output_path)
         # TODO: include onnx as dev dependency for checking

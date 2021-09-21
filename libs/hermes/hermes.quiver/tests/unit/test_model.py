@@ -7,7 +7,7 @@ from hermes.quiver import Model, Platform
 from hermes.quiver.exporters import TorchOnnx
 
 sys.path.insert(0, os.path.dirname(__file__))
-from utils import DummyRepo, IdentityModel  # noqa
+from utils import DummyRepo, IdentityTorchModel  # noqa
 
 
 def test_model():
@@ -19,7 +19,7 @@ def test_model():
         assert len(model.inputs) == 0
         assert len(model.outputs) == 0
 
-        model_fn = IdentityModel()
+        model_fn = IdentityTorchModel()
         assert isinstance(model._find_exporter(model_fn), TorchOnnx)
 
         export_path = model.export_version(
