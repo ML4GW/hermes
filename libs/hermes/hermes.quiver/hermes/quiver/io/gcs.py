@@ -144,6 +144,8 @@ class GCSFileSystem(FileSystem):
                 prefix = self.join(prefix, _prefix)
             elif _prefix:
                 prefix = _prefix
+        else:
+            prefix = path
 
         names = []
         for blob in self.bucket.list_blobs(prefix=prefix):

@@ -22,11 +22,11 @@ class FileSystem(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def delete(self, path: str):
+    def delete(self):
         pass
 
     @abc.abstractmethod
-    def remove(self):
+    def remove(self, path: str):
         pass
 
     @abc.abstractmethod

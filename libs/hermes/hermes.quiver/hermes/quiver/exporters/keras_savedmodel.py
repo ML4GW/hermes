@@ -52,13 +52,29 @@ class KerasSavedModel(Exporter, metaclass=KerasSavedModelMeta):
                 "No input shapes found, model hasn't been initialized"
             )
 
+        # do this instead of grabbing names directly to
+        # be robust to the case that a type_spec was specified
         input_shapes = {
-            x.name.split(":")[0]: tuple(x.shape) for x in model_fn.inputs
+            x._keras_history.layer.name: tuple(x.shape)
+            for x in model_fn.inputs
         }
+
         super().__call__(model_fn, version, input_shapes, None)
 
     def _get_output_shapes(self, model_fn, output_names=None):
-        return {x.name.split(":")[0]: tuple(x.shape) for x in model_fn.outputs}
+        output_shapes = {}
+        layer_idx = {}
+        for output in model_fn.outputs:
+            name = output._keras_history.layer.name
+            try:
+                name += "_" + str(layer_idx[name])
+                layer_idx[name] += 1
+            except KeyError:
+                layer_idx[name] = 1
+
+            output_shapes[name] = output.shape
+
+        return output_shapes
 
     def export(self, model_fn, export_path, verbose=0):
         with tempfile.TemporaryDirectory() as tmpdir:

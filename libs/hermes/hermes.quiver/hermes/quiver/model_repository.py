@@ -1,4 +1,5 @@
 import re
+from typing import Union
 
 from hermes.quiver import Model, Platform, io
 
@@ -88,15 +89,17 @@ class ModelRepository:
         self._models.append(model)
         return model
 
-    def remove(self, model_name: str):
-        try:
-            model = self.models.pop(model_name)
-        except KeyError:
-            raise ValueError(f"Unrecognized model {model_name}")
+    def remove(self, model: Union[str, Model]):
+        if isinstance(model, str):
+            try:
+                model = [i for i in self._models if i.name == model][0]
+            except IndexError:
+                raise ValueError(f"Unrecognized model {model}")
+
+        self._models.remove(model)
         self.fs.remove(model.name)
 
     def delete(self):
-        model_names = self.models.keys()
-        for model_name in model_names:
-            self.remove(model_name)
+        for model in self._models:
+            self.remove(model)
         self.fs.delete()

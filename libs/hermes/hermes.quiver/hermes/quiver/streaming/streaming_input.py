@@ -13,6 +13,17 @@ if TYPE_CHECKING:
 
 @tf.keras.utils.register_keras_serializable(name="Snapshotter")
 class Snapshotter(tf.keras.layers.Layer):
+    """Layer for capturing snapshots of streaming time series
+
+    Args:
+        snapshot_size:
+            The size of the snapshot to be updated
+        channels:
+            An ordered dictionary mapping the names of models
+            with snapshots to be updated to the number of
+            channels in each model
+    """
+
     def __init__(
         self,
         snapshot_size: int,
@@ -47,21 +58,23 @@ class Snapshotter(tf.keras.layers.Layer):
         )
         self.update_size = input_shape[2]
 
-    def call(self, stream):
-        update = tf.concat(
-            [self.snapshot[:, :, self.update_size :], stream], axis=2
-        )
+    def call(self, stream, sequence_start):
+        # grab the non-stale part of the existing snapshot
+        # multiply it by 0 if the sequence has been restarted
+        old = (1.0 - sequence_start) * self.snapshot[:, :, self.update_size :]
+
+        # create a new snapshot using the update and
+        # assign it to the variable
+        update = tf.concat([old, stream], axis=2)
         self.snapshot.assign(update)
-        splits = tf.split(update, list(self.channels.values()), axis=1)
 
-        outputs = []
-        for output, name in zip(splits, self.channels):
-            outputs.append(tf.identity(output, name=name))
-        return outputs
+        # split the updated snapshot into the various
+        # channels required for each model
+        return tf.split(update, list(self.channels.values()), axis=1)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shapes):
         return [
-            tf.TensorShape([input_shape[0], i, self.snapshot_size])
+            tf.TensorShape([input_shapes[0][0], i, self.snapshot_size])
             for i in self.channels.values()
         ]
 
@@ -82,6 +95,8 @@ def make_streaming_input_model(
     name: Optional[str] = None,
     streams_per_gpu: int = 1,
 ) -> "Model":
+    """Create a snapshotter model and add it to the repository"""
+
     if len(inputs) > 1 and not all(
         [x.shape[-1] == inputs[0].shape[-1] for x in inputs]
     ):
@@ -92,22 +107,50 @@ def make_streaming_input_model(
 
     # TODO: support 2D streaming
     channels = OrderedDict([(x.model.name, x.shape[1]) for x in inputs])
+
+    # construct the inputs to the model
     input = tf.keras.Input(
         name="stream",
         shape=(sum(channels.values()), stream_size),
         batch_size=1,  # TODO: other batch sizes
         dtype=tf.float32,
     )
+    sequence_start = tf.keras.Input(
+        name="sequence_start",
+        type_spec=tf.TensorSpec(
+            shape=(1,), name="sequence_start"  # TODO: batch size
+        ),
+    )
+
+    # construct and call the snapshotter layer
     snapshot_layer = Snapshotter(inputs[0].shape[-1], channels)
-    output = snapshot_layer(input)
-    snapshotter = tf.keras.Model(inputs=input, outputs=output)
+    output = snapshot_layer(input, sequence_start)
+
+    # build the model
+    inputs = [input, sequence_start]
+    snapshotter = tf.keras.Model(inputs=inputs, outputs=output)
 
     model = repository.add(
         name=name or "snapshotter", platform=Platform.SAVEDMODEL, force=True
     )
-    model.config.sequence_batching = model_config.ModelSequenceBatching(
-        max_sequence_idle_microseconds=10000000,
-        direct=model_config.ModelSequenceBatching.StrategyDirect(),
+
+    start = model_config.ModelSequenceBatching.Control.CONTROL_SEQUENCE_START
+    model.config.sequence_batching.MergeFrom(
+        model_config.ModelSequenceBatching(
+            max_sequence_idle_microseconds=10000000,
+            direct=model_config.ModelSequenceBatching.StrategyDirect(),
+            control_input=[
+                model_config.ModelSequenceBatching.ControlInput(
+                    name="sequence_start",
+                    control=[
+                        model_config.ModelSequenceBatching.Control(
+                            kind=start,
+                            fp32_false_true=[0, 1],
+                        )
+                    ],
+                )
+            ],
+        )
     )
 
     model.config.model_warmup.append(
@@ -124,5 +167,8 @@ def make_streaming_input_model(
     )
     model.config.add_instance_group(count=streams_per_gpu)
     model.export_version(snapshotter)
+
+    del model.config.input[1]
+    model.config.write()
 
     return model
