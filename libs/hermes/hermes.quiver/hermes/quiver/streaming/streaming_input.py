@@ -49,6 +49,9 @@ class Snapshotter(tf.keras.layers.Layer):
                 )
             )
 
+        # snapshot state is maintained like a model
+        # weight might be, since this creates a TF
+        # Variable which can be assigned to
         self.snapshot = self.add_weight(
             name="snapshot",
             shape=(input_shape[0], input_shape[1], self.snapshot_size),
@@ -115,6 +118,10 @@ def make_streaming_input_model(
         batch_size=1,  # TODO: other batch sizes
         dtype=tf.float32,
     )
+
+    # include an input which is used to indicate
+    # whether a new sequence is beginning to
+    # clear the state
     sequence_start = tf.keras.Input(
         name="sequence_start",
         type_spec=tf.TensorSpec(
@@ -134,6 +141,9 @@ def make_streaming_input_model(
         name=name or "snapshotter", platform=Platform.SAVEDMODEL, force=True
     )
 
+    # make the snapshotter model stateful by
+    # setting up sequence batching with a control
+    # flag for indicating the start of a new sequence
     start = model_config.ModelSequenceBatching.Control.CONTROL_SEQUENCE_START
     model.config.sequence_batching.MergeFrom(
         model_config.ModelSequenceBatching(
@@ -153,6 +163,8 @@ def make_streaming_input_model(
         )
     )
 
+    # add a model warm up since the first couple
+    # inference executions in TensorFlow can be slower
     model.config.model_warmup.append(
         model_config.ModelWarmup(
             inputs={
@@ -165,6 +177,8 @@ def make_streaming_input_model(
             name="zeros_warmup",
         )
     )
+
+    # set the number of streams desired per GPU
     model.config.add_instance_group(count=streams_per_gpu)
     model.export_version(snapshotter)
 
