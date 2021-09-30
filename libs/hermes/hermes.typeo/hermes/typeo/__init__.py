@@ -6,12 +6,28 @@ from typing import Callable, Optional, Tuple, Union
 
 
 class _DictParsingAction(argparse.Action):
-    def __init__(self, *args, **kwargs):
+    """Action for parsing dictionary arguments
+
+    Parse dictionary arguments using the form `key=value`,
+    with the `type` argument specifying the type of `value`.
+    The type of `key` must be a string. Alternatively, if
+    a single argument is passed without `=` in it, it will
+    be set as the value of the flag using `type`.
+
+    Example ::
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--a", type=int, action=_DictParsingAction)
+        args = parser.parse_args(["--a", "foo=1", "bar=2"])
+        assert args.a["foo"] == 1
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
         self._type = kwargs["type"]
         kwargs["type"] = str
         super().__init__(*args, **kwargs)
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         if len(values) == 1 and "=" not in values[0]:
             setattr(namespace, self.dest, self._type(values[0]))
             return

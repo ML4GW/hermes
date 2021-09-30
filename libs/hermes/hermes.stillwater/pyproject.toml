@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "hermes.stillwater"
+version = "0.1.0"
+description = "Tools for building asynchronous inference pipelines"
+authors = ["Alec Gunny <alec.gunny@gmail.com>"]
+packages = [
+    {include = "hermes"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+tritonclient = {extras = ["all"], version = "^2.5.0", source = "ngc"}
+numpy = "^1.21"
+tblib = "^1.7"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2"
+
+# documentation dependencies
+sphinx = "^4.1"
+sphinx-material = "^0.0.34"
+
+[[tool.poetry.source]]
+# NVIDIA pypi repo for tritonclient install
+name = "ngc"
+url = "https://pypi.ngc.nvidia.com"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "debug"
+
+[build-system]
+requires = ["poetry>=1.0"]
+build-backend = "poetry.masonry.api"
