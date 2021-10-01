@@ -11,7 +11,7 @@ if __name__ == "__main__":
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     with InferenceClient(
         "34.145.125.159:8001",
-        model_name="my-model_0",
+        model_name="ensemble",
         model_version=1,
         name="client",
         batch_size=8,
@@ -41,11 +41,8 @@ if __name__ == "__main__":
         client.in_q.put(StopIteration())
 
         for n, j in enumerate(client):
-            if j["y"].x.shape != (8, 1, 100):
-                logging.warning("Wrong shape {}".format(j["y"].x.shape))
-
             if (n + 1) % 50 == 0:
                 logging.debug("Completed {}/{}".format(n + 1, 1000))
         logging.info(f"Returned {n+1} requests")
-        logging.info(j["y"].x.shape)
+        logging.info(j)
 
