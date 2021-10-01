@@ -25,6 +25,7 @@ class InferenceClient(PipelineProcess):
         model_name: str,
         model_version: int,
         profile: bool = False,
+        batch_size: int = 1,
         rate: Optional[float] = None,
         join_timeout: float = 10,
         name: Optional[str] = None,
@@ -46,7 +47,7 @@ class InferenceClient(PipelineProcess):
         self.model_name = model_name
         self.model_version = model_version
 
-        self.inputs, self.states = self.build_inputs()
+        self.inputs, self.states = self.build_inputs(batch_size)
 
         self.message_start_times = {}
         self.profile = profile
@@ -56,15 +57,16 @@ class InferenceClient(PipelineProcess):
 
         super().__init__(name, rate, join_timeout)
 
-    def build_inputs(self):
+    def build_inputs(self, batch_size):
         config = self.client.get_model_config(self.model_name).config
         metadata = self.client.get_model_metadata(self.model_name)
 
         states, inputs = [], []
         for config_input, metadata_input in zip(config.input, metadata.inputs):
+            shape = [i if i > 0 else batch_size for i in metadata_input.shape]
             input = triton.InferInput(
                 name=metadata_input.name,
-                shape=metadata_input.shape,
+                shape=shape,
                 datatype=metadata_input.datatype,
             )
             for step in config.ensemble_scheduling.step:
@@ -77,6 +79,9 @@ class InferenceClient(PipelineProcess):
                     and list(step.input_map.values())[0] == config_input.name
                     and step.model_name.startswith("snapshotter")
                 ):
+                    # only support streaming with batch size 1
+                    shape[0] = 1
+
                     # now read the model config for the snapshotter to
                     # figure out what the names of its outputs are
                     snapshotter_config = self.client.get_model_config(
@@ -98,7 +103,9 @@ class InferenceClient(PipelineProcess):
                             for key, val in s.input_map.items():
                                 if val == map_key:
                                     channel_name = f"{s.model_name}/{key}"
-                                    channel_map[channel_name] = x.dims[1]
+                                    shape = list(metadata_input.shape)
+                                    shape[1] = x.dims[1]
+                                    channel_map[channel_name] = tuple(shape)
                                     break
                             else:
                                 continue
@@ -121,10 +128,15 @@ class InferenceClient(PipelineProcess):
             super().run()
 
     def cleanup(self, exc):
+        # if we've run into an error, stop sending
+        # requests to the server. Clear the client's
+        # internal request queue and add its sentinel,
+        # None, to indicate to kill its thread
         if len(self.states) > 0:
             self.client._stream._request_queue.queue.clear()
             self.client._stream._request_queue.put(None)
 
+        # now do regular cleanup
         super().cleanup(exc)
 
     def _validate_package(
@@ -175,15 +187,14 @@ class InferenceClient(PipelineProcess):
         self,
         package: Package,
         name: str,
-        channels: int,
+        shape: Tuple[int, ...],
         sequence_start: Optional[bool],
         sequence_end: Optional[bool],
     ) -> Tuple[bool, bool]:
-        expected_shape = (1, channels) + self.state.shape()[2:]
-        if package.x.shape != expected_shape:
+        if package.x.shape != shape:
             raise ValueError(
                 f"State {name} has shape {package.x.shape}, "
-                f"but expected shape {expected_shape}"
+                f"but expected shape {shape}"
             )
 
         if sequence_start is None and package.sequence_start is not None:
@@ -224,7 +235,9 @@ class InferenceClient(PipelineProcess):
             # make sure that any sequence id, request id,
             # or timestamps set on the package agree with
             # any values that we've seen so far
-            sequence_id, request_id, t0 = self._validate_package(package)
+            sequence_id, request_id, t0 = self._validate_package(
+                package, sequence_id, request_id, t0
+            )
             input.set_data_from_numpy(package.x)
 
         # for any streaming input states, collect all
@@ -237,7 +250,7 @@ class InferenceClient(PipelineProcess):
 
             # for each update in the state, try to
             # get the update for it and do the checks
-            for name, channels in channel_map.items():
+            for name, shape in channel_map.items():
                 try:
                     package = packages[name]
                 except KeyError:
@@ -249,7 +262,7 @@ class InferenceClient(PipelineProcess):
                     package, sequence_id, request_id, t0
                 )
                 sequence_start, sequence_end = self._validate_state(
-                    package, name, channels, sequence_start, sequence_end
+                    package, name, shape, sequence_start, sequence_end
                 )
 
                 # add the update to our running list of updates
@@ -262,7 +275,7 @@ class InferenceClient(PipelineProcess):
 
             # set the state input tensor with the
             # collected states if there are any
-            if len(state) > 0:
+            if len(states) > 0:
                 state.set_data_from_numpy(states[0])
 
         # record the start time of the message internally
@@ -332,8 +345,12 @@ class InferenceClient(PipelineProcess):
         try:
             # raise the error if anything went wrong
             if error is not None:
-                if isinstance(error, triton.InferenceServerException):
-                    error = RuntimeError(str(error))
+                # need to wrap Triton server exceptions since
+                # they require an extra arg which throws off
+                # the pickler. TODO: can we fix this in the
+                # ExceptionWrapper class?
+                # if isinstance(error, triton.InferenceServerException):
+                error = RuntimeError(str(error))
                 raise error
 
             # read the request id from the server response
@@ -359,6 +376,11 @@ class InferenceClient(PipelineProcess):
             # send these parsed outputs to downstream processes
             self.out_q.put(np_output)
         except Exception as e:
+            # since this is executing asynchronously, wait until
+            # the logger gets initialized before doing cleanup
+            while self.logger is None:
+                time.sleep(1e-6)
+
             # run cleanup, which should stop the process
             self.cleanup(e)
 
@@ -367,7 +389,7 @@ class InferenceClient(PipelineProcess):
         if sequence_id is not None:
             self.client.async_stream_infer(
                 self.model_name,
-                model_version=self.model_version,
+                model_version=str(self.model_version),
                 inputs=self.inputs + [x[0] for x in self.states],
                 request_id=request_id,
                 sequence_id=sequence_id,
@@ -378,7 +400,7 @@ class InferenceClient(PipelineProcess):
         else:
             self.client.async_infer(
                 self.model_name,
-                model_version=self.model_version,
+                model_version=str(self.model_version),
                 inputs=self.inputs,
                 request_id=request_id,
                 callback=self.callback,

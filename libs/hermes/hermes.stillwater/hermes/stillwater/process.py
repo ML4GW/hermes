@@ -25,6 +25,7 @@ class PipelineProcess(mp.Process):
             self.throttle = nullcontext()
 
         self.join_timeout = join_timeout
+        self.logger = None
         super().__init__(name=name)
 
     @property
@@ -35,7 +36,7 @@ class PipelineProcess(mp.Process):
         self._stop_event.set()
 
     def cleanup(self, exc):
-        self.logger.error(f"Encountered {exc.__class__.__name__}")
+        self.logger.error(f"Encountered {exc.__class__.__name__}: {exc}")
         self.out_q.put(ExceptionWrapper(exc))
 
         self.stop()
@@ -63,8 +64,6 @@ class PipelineProcess(mp.Process):
         exitcode = 0
         try:
             self.logger = listener.add_process(self)
-            self.logger.warning("hey!")
-
             with self.throttle:
                 while not self.stopped:
                     inputs = self.get_package()
@@ -98,12 +97,32 @@ class PipelineProcess(mp.Process):
         if type_ is not None and listener._thread is not None:
             listener.stop()
 
+        # try to join the process if we can
         self.join(self.join_timeout)
         if self.exitcode is None:
-            logger.warning(f"Process {self.name} couldn't close gracefully")
+            # if the process is still running after the wait
+            # time, terminate it and log a warning
+            logger.warning(
+                f"Process {self.name} couldn't join gracefully. Terminating"
+            )
             self.terminate()
             time.sleep(1)
+        else:
+            logger.debug(f"Process {self.name} joined gracefully")
+
+        # close the process
         self.close()
+
+        # clear and close the input queue
+        # to kill the daemon thread
+        logger.debug(f"Clearing input queue for process {self.name}")
+        while True:
+            try:
+                self.in_q.get_nowait()
+            except Empty:
+                break
+        logger.debug(f"Input queue for process {self.name} cleared")
+        self.in_q.close()
 
     def __iter__(self):
         return self
