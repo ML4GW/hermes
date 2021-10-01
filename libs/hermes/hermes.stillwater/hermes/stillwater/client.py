@@ -220,6 +220,10 @@ class InferenceClient(PipelineProcess):
         return sequence_start, sequence_end
 
     def get_package(self):
+        # if we hit a stop iteration from upstream processes,
+        # don't raise it until all the currently in-flight
+        # requests get handled, since the exception will
+        # get inserted into the out_q before these responses
         try:
             packages = super().get_package()
         except StopIteration:

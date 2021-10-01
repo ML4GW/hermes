@@ -45,4 +45,3 @@ if __name__ == "__main__":
                 logging.debug("Completed {}/{}".format(n + 1, 1000))
         logging.info(f"Returned {n+1} requests")
         logging.info(j)
-
