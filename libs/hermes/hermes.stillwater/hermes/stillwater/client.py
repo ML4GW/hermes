@@ -478,7 +478,7 @@ class InferenceClient(PipelineProcess):
         """Make a request to the server using the passed parameters"""
 
         request_id = self.clock_start(request_id, sequence_id)
-        if sequence_id is not None:
+        if len(self.states) > 0:
             self.client.async_stream_infer(
                 self.model_name,
                 model_version=str(self.model_version),
