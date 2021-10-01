@@ -46,12 +46,12 @@ class PipelineProcess(mp.Process):
             try:
                 item = q.get_nowait()
             except Empty:
-                if self.stopped:
-                    break
                 time.sleep(1e-6)
             else:
                 if isinstance(item, ExceptionWrapper):
                     item.reraise()
+                elif item == StopIteration or isinstance(item, StopIteration):
+                    raise StopIteration
                 return item
 
     def get_package(self):

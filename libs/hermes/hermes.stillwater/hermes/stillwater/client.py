@@ -220,7 +220,12 @@ class InferenceClient(PipelineProcess):
         return sequence_start, sequence_end
 
     def get_package(self):
-        packages = super().get_package()
+        try:
+            packages = super().get_package()
+        except StopIteration:
+            while len(self.message_start_times) > 0:
+                time.sleep(1e-3)
+            raise
 
         # if we have any non-stateful inputs, set their
         # input value using the corresponding package
@@ -280,7 +285,10 @@ class InferenceClient(PipelineProcess):
 
         # record the start time of the message internally
         # for passing to downstream processes
-        self.message_start_times[f"{request_id}_{sequence_id}"] = t0
+        key = str(request_id)
+        if sequence_id is not None:
+            key += "_" + str(sequence_id)
+        self.message_start_times[key] = t0
 
         # return all the info we need to make
         # the appropriate inference call using
@@ -329,6 +337,7 @@ class InferenceClient(PipelineProcess):
             request_id, sequence_id = map(int, request_id.split("_"))
         except ValueError:
             # if not, return None for the sequence id
+            request_id = int(request_id)
             sequence_id = None
 
         return request_id, sequence_id, t0
@@ -376,6 +385,12 @@ class InferenceClient(PipelineProcess):
             # send these parsed outputs to downstream processes
             self.out_q.put(np_output)
         except Exception as e:
+            # don't do anything if we're stopped since
+            # these will be secondary to whatever issue
+            # caused the stop in the first place
+            if self.stopped:
+                return
+
             # since this is executing asynchronously, wait until
             # the logger gets initialized before doing cleanup
             while self.logger is None:

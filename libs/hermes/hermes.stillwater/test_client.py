@@ -38,7 +38,14 @@ if __name__ == "__main__":
 
             client.in_q.put(packages)
             time.sleep(0.001)
+        client.in_q.put(StopIteration())
 
         for n, j in enumerate(client):
-            continue
-        print(n, j)
+            if j["y"].x.shape != (8, 1, 100):
+                logging.warning("Wrong shape {}".format(j["y"].x.shape))
+
+            if (n + 1) % 50 == 0:
+                logging.debug("Completed {}/{}".format(n + 1, 1000))
+        logging.info(f"Returned {n+1} requests")
+        logging.info(j["y"].x.shape)
+
