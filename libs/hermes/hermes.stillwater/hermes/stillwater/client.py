@@ -41,6 +41,7 @@ class InferenceClient(PipelineProcess):
         except triton.InferenceServerException:
             raise RuntimeError(f"Couldn't connect to server at {url}")
 
+        self.client = client
         self.url = url
         self.model_name = model_name
         self.model_version = model_version
@@ -56,7 +57,7 @@ class InferenceClient(PipelineProcess):
         super().__init__(name, rate, join_timeout)
 
     def build_inputs(self):
-        config = self.client.get_model_metadata(self.model_name).config
+        config = self.client.get_model_config(self.model_name).config
         metadata = self.client.get_model_metadata(self.model_name)
 
         states, inputs = [], []
@@ -64,7 +65,7 @@ class InferenceClient(PipelineProcess):
             input = triton.InferInput(
                 name=metadata_input.name,
                 shape=metadata_input.shape,
-                datatype=metadata.datatype,
+                datatype=metadata_input.datatype,
             )
             for step in config.ensemble_scheduling.step:
                 # see if this input corresponds to the input
@@ -89,31 +90,18 @@ class InferenceClient(PipelineProcess):
                     # number of channels in the state
                     channel_map = {}
                     for x in snapshotter_config.output:
-                        map_key = step.output_config[x.name]
+                        map_key = step.output_map[x.name]
 
                         # look for the model whose input
                         # gets fed by this output
                         for s in config.ensemble_scheduling.step:
-                            input_name = [
-                                key
-                                for key, val in s.input_map.items()
-                                if val == map_key
-                            ]
-                            if len(input_name) > 0:
-                                input_name = input_name[0]
-
-                                outputs = self.client.get_model_config(
-                                    s.model_name
-                                ).config.output
-
-                                num_channels = [
-                                    x.dims[1]
-                                    for x in outputs
-                                    if x.name == input_name
-                                ][0]
-
-                                channel_name = f"{s.model_name}/{input_name}"
-                                channel_map[channel_name] = num_channels
+                            for key, val in s.input_map.items():
+                                if val == map_key:
+                                    channel_name = f"{s.model_name}/{key}"
+                                    channel_map[channel_name] = x.dims[1]
+                                    break
+                            else:
+                                continue
 
                     # add this state to our states
                     states.append((input, channel_map))

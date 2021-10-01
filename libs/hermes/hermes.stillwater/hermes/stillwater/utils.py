@@ -1,7 +1,12 @@
 import sys
 import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 from tblib import pickling_support
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @pickling_support.install
@@ -61,3 +66,13 @@ class Throttle:
         while (time.time() - self._last_time) < self.sleep_time:
             time.sleep(1e-6)
         self.update()
+
+
+@dataclass
+class Package:
+    x: "np.ndarray"
+    t0: float
+    request_id: Optional[int] = None
+    sequence_id: Optional[int] = None
+    sequence_start: Optional[bool] = None
+    sequence_end: Optional[bool] = None
