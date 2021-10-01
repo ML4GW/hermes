@@ -1,13 +1,16 @@
 import multiprocessing as mp
 import random
 import time
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 import tritonclient.grpc as triton
 
 from hermes.stillwater.process import PipelineProcess
 from hermes.stillwater.utils import Package
+
+if TYPE_CHECKING:
+    from tritonclient.grpc.model_config_pb2 import InferInput
 
 
 def _raise_no_match(self, attr, first, second):
@@ -19,6 +22,38 @@ def _raise_no_match(self, attr, first, second):
 
 
 class InferenceClient(PipelineProcess):
+    """Process for making asynchronous requests to a Triton inference service
+
+    Make asynchronous requests to a Triton inference service
+    in a separate process in order to make requests in tandem
+    with data pre- and post-processing. Uses model metadata to
+    build input protobufs and dynamically detects the presence
+    of snapshotter states, exposing metadata about those states
+    for building data generators.
+
+    Args:
+        url:
+            The url at which the service is being hosted
+        model_name:
+            The name of the model to which to make requests
+        model_version:
+            The version of the model to which to make requests
+        profile:
+            Whether to record round-trip latencies to and from
+            the server in a separate queue for profiling purposes
+        batch_size:
+            The batch size to use for the non-stateful inputs
+            to the model. Inputs with batch sizes smaller than
+            this will need to be padded.
+        rate:
+            Maximum rate at which to send requests to the server
+        join_timeout:
+            How long to wait for the process to join gracefully
+            before terminating it.
+        name:
+            Name to assign to the process
+    """
+
     def __init__(
         self,
         url: str,
@@ -29,7 +64,7 @@ class InferenceClient(PipelineProcess):
         rate: Optional[float] = None,
         join_timeout: float = 10,
         name: Optional[str] = None,
-    ):
+    ) -> None:
         try:
             client = triton.InferenceServerClient(url)
 
@@ -42,14 +77,30 @@ class InferenceClient(PipelineProcess):
         except triton.InferenceServerException:
             raise RuntimeError(f"Couldn't connect to server at {url}")
 
+        # record some of these input args as attributes for inspection
         self.client = client
         self.url = url
         self.model_name = model_name
         self.model_version = model_version
 
-        self.inputs, self.states = self.build_inputs(batch_size)
+        # `inputs` will be a list of Triton `InferInput`
+        # objects representing the non-stateful inputs
+        # to the model
+        # `states` will be a list of tuples where the first
+        # input will be a Triton `InferInput` object representing
+        # an input to a snapshotter model, and the second
+        # will be a dictionary mapping from downstream input names
+        # that the snapshotter feeds to the shape of that input
+        self.inputs, self.states = self._build_inputs(batch_size)
 
+        # `message_start_times` will record the t0 of
+        # requests that are in flight so that these
+        # can be passed to downstream processes for e.g.
+        # end-to-end latency recording
         self.message_start_times = {}
+
+        # if we profile, pass round-trip latencies
+        # to a hidden queue called `profile_q`
         self.profile = profile
         if self.profile:
             self._profile_q = mp.Queue()
@@ -57,7 +108,16 @@ class InferenceClient(PipelineProcess):
 
         super().__init__(name, rate, join_timeout)
 
-    def build_inputs(self, batch_size):
+    def _build_inputs(
+        self, batch_size: int
+    ) -> Tuple[
+        List["InferInput"],
+        List[Tuple["InferInput", Dict[str, Tuple[int, ...]]]],
+    ]:
+        """Build Triton InferInputs for the inputs to the model"""
+
+        # TODO: confirm that batch_size is not larger
+        # than config.max_batch_size?
         config = self.client.get_model_config(self.model_name).config
         metadata = self.client.get_model_metadata(self.model_name)
 
@@ -247,6 +307,11 @@ class InferenceClient(PipelineProcess):
             sequence_id, request_id, t0 = self._validate_package(
                 package, sequence_id, request_id, t0
             )
+
+            # TODO: Should pad inputs with batches smaller than
+            # batch size, and record it somewhere for
+            # slicing in the callback? Also raise an error
+            # for batches that are larger than batch size?
             input.set_data_from_numpy(package.x)
 
         # for any streaming input states, collect all
@@ -403,7 +468,15 @@ class InferenceClient(PipelineProcess):
             # run cleanup, which should stop the process
             self.cleanup(e)
 
-    def process(self, request_id, sequence_id, sequence_start, sequence_end):
+    def process(
+        self,
+        request_id: str,
+        sequence_id: str,
+        sequence_start: Optional[bool],
+        sequence_end: Optional[bool],
+    ) -> None:
+        """Make a request to the server using the passed parameters"""
+
         request_id = self.clock_start(request_id, sequence_id)
         if sequence_id is not None:
             self.client.async_stream_infer(

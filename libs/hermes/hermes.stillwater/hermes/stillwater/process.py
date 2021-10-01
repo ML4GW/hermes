@@ -3,10 +3,15 @@ import sys
 import time
 from contextlib import nullcontext
 from queue import Empty
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from hermes.stillwater.logging import listener, logger
 from hermes.stillwater.utils import ExceptionWrapper, Throttle
+
+if TYPE_CHECKING:
+    from queue import Queue
+
+    from hermes.stillwater.utils import Package
 
 
 class PipelineProcess(mp.Process):
@@ -35,13 +40,29 @@ class PipelineProcess(mp.Process):
     def stop(self) -> None:
         self._stop_event.set()
 
-    def cleanup(self, exc):
+    def cleanup(self, exc: Exception) -> None:
+        """Gracefully clean up the process if an exception is encountered"""
+
         self.logger.error(f"Encountered {exc.__class__.__name__}: {exc}")
         self.out_q.put(ExceptionWrapper(exc))
 
         self.stop()
 
-    def _impatient_get(self, q):
+    def _impatient_get(self, q: "Queue") -> "Package":
+        """Wait forever to get an object from a queue
+
+        Gets and item from a queue in a way that
+        waits forever without blocking so that
+        errors that get bubbled up can interrupt
+        appropriately. Also checks to see if upstream
+        processes have passed an exception and raises
+        them so that the traceback is maintained.
+
+        Args:
+            q:
+                The queue to get from
+        """
+
         while True:
             try:
                 item = q.get_nowait()
@@ -54,10 +75,10 @@ class PipelineProcess(mp.Process):
                     raise StopIteration
                 return item
 
-    def get_package(self):
+    def get_package(self) -> "Package":
         return self._impatient_get(self.in_q)
 
-    def process(self, package):
+    def process(self, package: "Package") -> None:
         self.out_q.put(package)
 
     def run(self) -> None:
@@ -83,11 +104,11 @@ class PipelineProcess(mp.Process):
             listener.queue.join()
             sys.exit(exitcode)
 
-    def __enter__(self):
+    def __enter__(self) -> "PipelineProcess":
         self.start()
         return self
 
-    def __exit__(self, type_, value, traceback):
+    def __exit__(self, type_, value, traceback) -> None:
         if not self.stopped:
             self.stop()
 
@@ -124,8 +145,8 @@ class PipelineProcess(mp.Process):
         logger.debug(f"Input queue for process {self.name} cleared")
         self.in_q.close()
 
-    def __iter__(self):
+    def __iter__(self) -> "PipelineProcess":
         return self
 
-    def __next__(self):
+    def __next__(self) -> "Package":
         return self._impatient_get(self.out_q)
