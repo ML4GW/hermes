@@ -1,5 +1,6 @@
 import json
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Optional, Union
 
@@ -8,6 +9,7 @@ from google.cloud import compute_v1 as compute
 from google.oauth2.service_account import Credentials as GoogleCredentials
 from requests import HTTPError
 
+from hermes.cloudbreak.base.resource import ResourceMeta
 from hermes.cloudbreak.base.vm import Client, VMInstance
 from hermes.cloudbreak.clouds.google.utils import Credentials, make_credentials
 from hermes.cloudbreak.utils import snakeify
@@ -66,15 +68,22 @@ class GoogleVMManager:
         credentials: Credentials,
     ):
         self.description = description
-        self.parent = GoogleClient(credentials)
+        super.__init__(description.name, GoogleClient(credentials))
 
+    def create_one_vm(self, name):
+        description = deepcopy(self.description)
+        description.name = name
+        return GoogleVMInstance.create(name, self, description)
+
+
+class GoogleVMInstanceMeta(ResourceMeta):
     @property
-    def name(self):
-        return self.description.name
+    def resource_type(self):
+        return compute.Instance
 
 
 @dataclass
-class GoogleVMInstance(VMInstance):
+class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
     zone: str
 
     def __post_init__(self):
