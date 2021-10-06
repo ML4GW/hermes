@@ -25,13 +25,21 @@ class PulsingBarColumn(BarColumn):
         )
 
 
-def wait_for(callback: Callable, msg: Optional[str] = None):
+def wait_for(
+    callback: Callable,
+    msg: Optional[str] = None,
+    timeout: Optional[float] = None,
+):
     def run():
+        start_time = time.time()
         while True:
             result = callback()
             if result:
                 return result
             time.sleep(0.1)
+
+            if timeout is not None and (time.time() - start_time) > timeout:
+                raise RuntimeError(f"Timeout {timeout} reached")
 
     if msg:
         with Progress(

@@ -1,49 +1,33 @@
 import math
 import os
-from typing import Optional, Sequence, Union
+from typing import Optional, Union
 
 import google
-from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import container_v1 as container
-from google.oauth2.service_account import Credentials
 
 from hermes.cloudbreak.clouds.base.kubernetes import (
-    Client,
     Cluster,
     ClusterManager,
-    ManagerResource,
     NodePool,
+)
+from hermes.cloudbreak.clouds.base.resource import (
+    Client,
+    ManagerResource,
     Resource,
     ResourceMeta,
 )
+from hermes.cloudbreak.clouds.google.utils import (
+    Credentials,
+    make_credentials,
+    refresh,
+)
 from hermes.cloudbreak.utils import snakeify
-
-_credentials_type = Union[str, Credentials, None]
-
-
-def make_credentials(
-    service_account_key_file: str,
-    scopes: Optional[Sequence[str]] = None,
-):
-    """
-    Cheap wrapper around service account creation
-    class method to simplify a couple gotchas. Might
-    either be overkill or may be better built as a
-    class with more functionality, not sure yet.
-    """
-    scopes = scopes or ["https://www.googleapis.com/auth/cloud-platform"]
-    credentials = Credentials.from_service_account_file(
-        service_account_key_file,
-        scopes=scopes,
-    )
-    credentials.refresh(AuthRequest())
-    return credentials
 
 
 class GoogleClient(Client):
     def __init__(
         self,
-        credentials: Union[str, Credentials, None] = None,
+        credentials: Credentials = None,
         throttle_secs: float = 1.0,
     ):
         if isinstance(credentials, str):
@@ -180,7 +164,7 @@ class GoogleCluster(
         return self.client._client._transport._credentials.token
 
     def refresh_credentials(self) -> str:
-        self.client._client._transport._credentials.refresh(AuthRequest())
+        refresh(self.client._client._transport._credentials)
 
     def deploy_gpu_drivers(self) -> None:
         drivers_daemon_set = self.deploy(
