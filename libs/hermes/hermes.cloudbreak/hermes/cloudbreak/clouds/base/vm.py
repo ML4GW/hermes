@@ -7,10 +7,10 @@ import paramiko
 from rich.progress import Progress
 from scp import SCPClient
 
-from hermes.cloudbreak import logger
-from hermes.cloudbreak.base.resource import Resource
+from hermes.cloudbreak.clouds.base.resource import Resource
+from hermes.cloudbreak.logging import logger
 
-Response = Optional[str, None]
+Response = Optional[str]
 Responses = List[Response]
 
 

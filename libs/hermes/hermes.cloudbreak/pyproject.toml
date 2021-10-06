@@ -9,10 +9,18 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
+
+# generic utilities
 rich = "^10.7"
-google-cloud-storage = "^1.38"
-google-cloud-container = "^2.7"
 kubernetes = "^17.17"
+paramiko = "^2.7"
+scp = "^0.14"
+
+# google cloud utilities
+# TODO: make optional
+google-cloud-container = "^2.7"
+google-cloud-compute = "^0.5"
+google-cloud-storage = "^1.38"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"

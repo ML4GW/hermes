@@ -9,13 +9,13 @@ from google.cloud import compute_v1 as compute
 from google.oauth2.service_account import Credentials as GoogleCredentials
 from requests import HTTPError
 
-from hermes.cloudbreak.base.resource import ResourceMeta
-from hermes.cloudbreak.base.vm import Client, VMInstance
+from hermes.cloudbreak.clouds.base.resource import ResourceMeta
+from hermes.cloudbreak.clouds.base.vm import VMInstance, VMManager
 from hermes.cloudbreak.clouds.google.utils import Credentials, make_credentials
 from hermes.cloudbreak.utils import snakeify
 
 
-class GoogleClient(Client):
+class GoogleVMClient:
     def __init__(
         self,
         credentials: Credentials = None,
@@ -61,14 +61,14 @@ class VMBadRequest(Exception):
     pass
 
 
-class GoogleVMManager:
+class GoogleVMManager(VMManager):
     def __init__(
         self,
         description: compute.Instance,
         credentials: Credentials,
     ):
         self.description = description
-        super.__init__(description.name, GoogleClient(credentials))
+        super.__init__(description.name, GoogleVMClient(credentials))
 
     def create_one_vm(self, name):
         description = deepcopy(self.description)
@@ -98,7 +98,7 @@ class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
     def create(
         cls,
         name: str,
-        parent: Union[GoogleClient, GoogleVMManager],
+        parent: Union[GoogleVMClient, GoogleVMManager],
         description: compute.Instance,
     ):
         # we can get some of the info we need implicitly
