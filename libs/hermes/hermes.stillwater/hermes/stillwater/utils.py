@@ -1,7 +1,7 @@
 import sys
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from tblib import pickling_support
 
@@ -26,13 +26,13 @@ class ExceptionWrapper(Exception):
         return str(self.exc)
 
 
+@dataclass
 class Throttle:
-    def __init__(self, target_rate: float, alpha: float = 0.9):
-        self.target_rate = target_rate
-        self.alpha = alpha
-        self.unset()
+    target_rate: float
+    alpha: float = 0.9
+    condition: Optional[Callable] = None
 
-    def unset(self):
+    def __post_init__(self):
         self._n = 0
         self._delta = 0
         self._start_time = None
@@ -55,14 +55,15 @@ class Throttle:
         diff = (1 / self.rate) - (1 / self.target_rate)
         self._delta = self._delta + (1 - self.alpha) * diff
 
-    def __enter__(self):
+    def __iter__(self):
         self._start_time = self._last_time = time.time()
         return self
 
-    def __exit__(self, *exc_args):
-        self.unset()
+    def __next__(self):
+        if self.condition is not None and self.condition():
+            self.__post_init__()
+            raise StopIteration
 
-    def throttle(self):
         while (time.time() - self._last_time) < self.sleep_time:
             time.sleep(1e-6)
         self.update()

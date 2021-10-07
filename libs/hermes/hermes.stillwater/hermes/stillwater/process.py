@@ -1,7 +1,6 @@
 import multiprocessing as mp
 import sys
 import time
-from contextlib import nullcontext
 from queue import Empty
 from typing import TYPE_CHECKING, Optional
 
@@ -24,10 +23,15 @@ class PipelineProcess(mp.Process):
         self.in_q = mp.Queue()
         self.out_q = mp.Queue()
 
+        # build a throttle to use during the target process
+        # to limit ourselves to the target rate if we passed
+        # one, otherwise we'll just iterate infinitely. In
+        # either case, use the stop event's set status to
+        # indicate when the loop should be interrupted
         if rate is not None:
-            self.throttle = Throttle(rate)
+            self.throttle = Throttle(rate, condition=self._stop_event.is_set)
         else:
-            self.throttle = nullcontext()
+            self.throttle = iter(self._stop_event.is_set, True)
 
         self.join_timeout = join_timeout
         self.logger = None
@@ -84,24 +88,41 @@ class PipelineProcess(mp.Process):
     def run(self) -> None:
         exitcode = 0
         try:
+            # create a multiprocessing logger that
+            # write logs to the main process for handling
             self.logger = listener.add_process(self)
-            with self.throttle:
-                while not self.stopped:
-                    inputs = self.get_package()
-                    if inputs is not None:
-                        try:
-                            self.process(*inputs)
-                        except TypeError:
-                            self.process(inputs)
 
-                        if not isinstance(self.throttle, nullcontext):
-                            self.throttle.throttle()
+            # run everything in a throttle context in
+            # case we want to rate control everything
+            for _ in self.throttle:
+                # try to get the next package, and process
+                # it if there's anything to process
+                inputs = self.get_package()
+                if inputs is not None:
+
+                    # try passing a starmap so that subclasses
+                    # don't always have to return lists, but
+                    # otherwise call the downstream process
+                    # normally
+                    try:
+                        self.process(*inputs)
+                    except TypeError:
+                        self.process(inputs)
+
         except Exception as e:
+            # pass on any exceptions to downstream processes
+            # and set the exitcode to indicate an error
+            # TODO: should we do a special case for StopIterations?
             self.cleanup(e)
             exitcode = 1
         finally:
+            # send one last log to the main process then
+            # close the queue and wait for the thread to join
             self.logger.debug("Target completed")
-            listener.queue.join()
+            listener.queue.close()
+            listener.queue.join_thread()
+
+            # exit the process with the indicated code
             sys.exit(exitcode)
 
     def __enter__(self) -> "PipelineProcess":
@@ -150,3 +171,7 @@ class PipelineProcess(mp.Process):
 
     def __next__(self) -> "Package":
         return self._impatient_get(self.out_q)
+
+    def __rshift__(self, child):
+        child.in_q = self.out_q
+        return child.out_q

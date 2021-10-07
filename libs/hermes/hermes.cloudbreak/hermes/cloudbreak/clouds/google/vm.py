@@ -29,8 +29,6 @@ class GoogleVMClient:
         else:
             self._client = compute.InstancesClient()
 
-        super().__init__(0.1)
-
     @property
     def project(self):
         return self._client._transport._credentials._project_id
@@ -47,7 +45,7 @@ class GoogleVMClient:
         request_fn_name = snakeify(request_type)
         request_fn = getattr(self._client, request_fn_name)
 
-        self.throttle()
+        # self.throttle()
         return request_fn(request=request, **kwargs)
 
 
@@ -65,15 +63,19 @@ class GoogleVMManager(VMManager):
     def __init__(
         self,
         description: compute.Instance,
-        credentials: Credentials,
+        credentials: Credentials = None,
     ):
         self.description = description
-        super.__init__(description.name, GoogleVMClient(credentials))
+        super().__init__(description.name, GoogleVMClient(credentials))
+
+    @property
+    def project(self):
+        return self.parent.project
 
     def create_one_vm(self, name):
         description = deepcopy(self.description)
         description.name = name
-        return GoogleVMInstance.create(name, self, description)
+        return GoogleVMInstance.create(self, description)
 
 
 class GoogleVMInstanceMeta(ResourceMeta):
@@ -97,7 +99,6 @@ class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
     @classmethod
     def create(
         cls,
-        name: str,
         parent: Union[GoogleVMClient, GoogleVMManager],
         description: compute.Instance,
     ):
@@ -112,7 +113,7 @@ class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
         ).group(0)
 
         # instatiate the object before we create it
-        obj = super().create(cls, name, parent, zone)
+        obj = super().create(cls, description, parent, zone=zone)
 
         # if our vm has a startup script, make a note of it
         # so we can make sure it completes before we call
@@ -134,7 +135,7 @@ class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
             message = content["error"]["message"]
             if message != (
                 "The resource 'projects/{}/zones/{}/instances/{}' "
-                "already exists".format(obj.project, obj.zone, name)
+                "already exists".format(obj.project, obj.zone, obj.name)
             ):
                 raise RuntimeError(message) from e
 
@@ -164,7 +165,7 @@ class GoogleVMInstance(VMInstance, metaclass=GoogleVMInstanceMeta):
 
     def get_delete_request(self):
         return compute.DeleteInstanceRequest(
-            project=self.project, zone=self.zone, filter=f"name = {self.name}"
+            project=self.project, zone=self.zone, instance=self.name
         )
 
     def delete(self):
@@ -308,6 +309,7 @@ def make_simple_debian_instance_description(
     else:
         metadata = None
 
+    # TODO: allow specification of IP address
     return compute.Instance(
         name=name,
         service_accounts=service_account,

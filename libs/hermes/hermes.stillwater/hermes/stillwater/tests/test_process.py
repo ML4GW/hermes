@@ -14,6 +14,21 @@ class ErrorProcess(PipelineProcess):
         raise RuntimeError("whoops!")
 
 
+class RangeProcess(PipelineProcess):
+    def __init__(self, N, *args, **kwargs):
+        self.N = N
+        self.n = 0
+        super().__init__(*args, **kwargs)
+
+    def get_package(self):
+        if self.n == self.N:
+            raise StopIteration
+        else:
+            n = self.n + 0
+            self.n += 1
+            return n
+
+
 def test_process(throttle_tol=0.15):
     # test that process starts when context enters
     with PipelineProcess(name="test_process") as process:
@@ -61,3 +76,26 @@ def test_process(throttle_tol=0.15):
     with pytest.raises(RuntimeError):
         with ErrorProcess(name="error_process") as process:
             next(iter(process))
+
+    # test the piping system for connecting
+    # one process to the another, using a process
+    # that just iterates through a range and another
+    # that just returns whatever it's passed unchanged
+    range_process = RangeProcess(100, name="range_process")
+    id_process = PipelineProcess(name="id_process")
+    q = range_process >> id_process
+
+    # start both the processes then iterate through
+    # the output queue of the second one and make
+    # sure all the indices are in order
+    with range_process, id_process:
+        for i in range(100):
+            j = q.get(1)
+            assert i == j
+
+        # make sure that the last item passed
+        # is a stop iteration
+        with pytest.raises(StopIteration):
+            exc = q.get(1)
+            if isinstance(exc, ExceptionWrapper):
+                exc.reraise()

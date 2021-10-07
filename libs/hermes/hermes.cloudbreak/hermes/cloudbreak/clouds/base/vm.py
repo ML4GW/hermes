@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
@@ -19,7 +20,15 @@ class VMManager:
     def __init__(self, name, parent):
         self.name = name
         self.parent = parent
-        self._resources = {}
+        self._resources = []
+
+    @property
+    def resources(self):
+        return {vm.name: vm for vm in self._resources}
+
+    @property
+    def N(self):
+        return len(self._resources)
 
     @property
     def client(self):
@@ -40,51 +49,105 @@ class VMManager:
             self.wait_for_delete()
 
     def delete(self):
-        for name, vm in self._resources.items():
+        for vm in self._resources:
             vm.delete()
 
     def wait_for_delete(self):
         with Progress() as progbar:
-            resources = self._resources.copy()
             task_id = progbar.add_task(
-                "Waiting for VMs to be ready", total=len(self._resources)
+                "Waiting for VMs to be delete", total=self.N
             )
             while self._resources:
-                for name in resources.keys():
-                    try:
-                        vm = resources[name]
-                    except KeyError:
-                        continue
-                    if vm.is_deleted():
-                        self._resources.pop(name)
-                        progbar.update(task_id, advance=1)
+                completed = [vm for vm in self._resources if vm.is_deleted()]
+                for vm in completed:
+                    self._resources.remove(vm)
+
+                progbar.update(task_id, advance=len(completed))
 
     def create(self, N: int, username: str, ssh_key_file: str):
         for i in range(N):
             name = self.name + f"-{i}"
             try:
-                vm = self._resources[name]
+                vm = self.resources[name]
             except KeyError:
                 vm = self.create_one_vm(name)
+                self._resources.append(vm)
 
             vm.set_user(username, ssh_key_file)
-            self._resources[name] = vm
 
     def wait_for_ready(self):
         with Progress() as progbar:
-            resources = self._resources.copy()
             task_id = progbar.add_task(
-                "Waiting for VMs to be ready", total=len(self._resources)
+                "Waiting for VMs to be ready", total=self.N
             )
-            while resources:
-                for name in self._resources.keys():
-                    try:
-                        vm = resources[name]
-                    except KeyError:
-                        continue
+            while not progbar.finished:
+                n = 0
+                for vm in self._resources:
                     if vm.is_ready():
-                        resources.pop(name)
-                        progbar.update(task_id, advance=1)
+                        n += 1
+                progbar.update(task_id, completed=n)
+
+    def run(self, cmd):
+        # TODO: what's a more intelligent way of handling this?
+        n_jobs = min(self.N, 32)
+        futures = []
+        with Progress() as progbar, ThreadPoolExecutor(n_jobs) as ex:
+            submit_task_id = progbar.add_task(
+                "Submitting commands", total=self.N
+            )
+            done_task_id = progbar.add_task(
+                "Waiting for responses", total=self.N
+            )
+
+            # submit the run command on each one of the vms
+            for vm in self._resources:
+                futures.append(ex.submit(vm.run, cmd))
+
+            stdouts, stderrs, exceptions = {}, {}, {}
+            while not progbar.finished:
+                # if not all the jobs are running yet, update
+                # the submit progress bar with the ones that are
+                if not progbar._tasks[submit_task_id].finished:
+                    n_submitted = len(
+                        [f for f in futures if f.running() or f.done()]
+                    )
+                    progbar.update(submit_task_id, completed=n_submitted)
+
+                # now iterate through all of the submitted
+                # futures and check for completion/errors
+                for vm, f in zip(self._resources, futures):
+                    if vm.name in stdouts or vm.name in exceptions:
+                        # we've already dealt with this future
+                        continue
+
+                    try:
+                        exc = f.exception(0.001)
+                    except TimeoutError:
+                        # this job hasn't finished yet, so move on
+                        continue
+                    else:
+                        if exc is not None:
+                            # the job finished but it raised an exception
+                            exceptions.append(exc)
+                        else:
+                            # the job finished and there was no exception
+                            # so grab the result from the finished future
+                            stdout, stderr = f.result()
+                            stdouts[vm.name] = stdout
+                            stderrs[vm.name] = stderr
+
+                        # either way, we have a job that's done, so
+                        # update our progress bar to reflect that
+                        progbar.update(done_task_id, advance=1)
+
+            # log all the exceptions we ran into but
+            # just raise the last of them
+            if len(exceptions) > 0:
+                for name, exc in exceptions.items():
+                    logger.error(f"Encountered error {exc} on VM {name}")
+                raise exc
+
+        return stdouts, stderrs
 
 
 @dataclass
@@ -101,10 +164,6 @@ class VMInstance(Resource):
     def ip(self):
         if self._ip is not None:
             return self._ip
-
-    @classmethod
-    def create(self, name, *args, **kwargs):
-        raise NotImplementedError
 
     @property
     def message(self):
@@ -138,7 +197,7 @@ class VMInstance(Resource):
             try:
                 client.connect(
                     username=username,
-                    hostname=self.instance.ip,
+                    hostname=self.ip,
                     key_filename=ssh_key_file,
                 )
                 break
@@ -146,7 +205,7 @@ class VMInstance(Resource):
                 logger.warning(
                     "Failed to connect to VM {} at IP {} on attempt {} "
                     "after receiving error {}. Trying again".format(
-                        self.instance.name, self.instance.ip, i + 1, str(e)
+                        self.name, self.ip, i + 1, str(e)
                     )
                 )
                 time.sleep(1)
@@ -155,7 +214,7 @@ class VMInstance(Resource):
             # connect to the instance, raise an error
             raise RuntimeError(
                 "Failed to connect to VM {} at IP {} after 5 attempts".format(
-                    self.instance.name, self.instance.ip
+                    self.name, self.ip
                 )
             )
 
