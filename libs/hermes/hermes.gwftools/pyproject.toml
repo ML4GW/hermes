@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "hermes.gwftools"
+version = "0.1.0"
+description = "Utilities for loading gravitational wave frame files"
+authors = ["Alec Gunny <alec.gunny@gmail.com>"]
+packages = [
+    {include = "hermes"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+"hermes.stillwater" = {path = "../hermes.stillwater", develop = true}
+
+# make GCS backend optional in case
+# we're running with local data
+[tool.poetry.dependencies."hermes.quiver"]
+path = "../hermes.quiver"
+develop = true
+optional = true
+extras = ["gcs"]
+
+[tool.poetry.extras]
+gcs = ["hermes.quiver"]
+
+[[tool.poetry.source]]
+# NVIDIA pypi repo for tritonclient install
+name = "ngc"
+url = "https://pypi.ngc.nvidia.com"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2"
+
+[build-system]
+requires = ["poetry>=1.0"]
+build-backend = "poetry.masonry.api"
