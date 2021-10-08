@@ -2,7 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import paramiko
 from rich.progress import Progress
@@ -23,22 +23,22 @@ class VMManager:
         self._resources = []
 
     @property
-    def resources(self):
+    def resources(self) -> Dict[str, "VMInstance"]:
         return {vm.name: vm for vm in self._resources}
 
     @property
-    def N(self):
+    def N(self) -> int:
         return len(self._resources)
 
     @property
     def client(self):
         return self.parent.client
 
-    def create_one_vm(self, name):
+    def create_one_vm(self, name: str) -> "VMInstance":
         raise NotImplementedError
 
     @contextmanager
-    def manage(self, N: int, username: str, ssh_key_file: str):
+    def manage(self, N: int, username: str, ssh_key_file: str) -> "VMManager":
         self.create(N, username, ssh_key_file)
         self.wait_for_ready()
 
@@ -48,11 +48,11 @@ class VMManager:
             self.delete()
             self.wait_for_delete()
 
-    def delete(self):
+    def delete(self) -> None:
         for vm in self._resources:
             vm.delete()
 
-    def wait_for_delete(self):
+    def wait_for_delete(self) -> None:
         with Progress() as progbar:
             task_id = progbar.add_task(
                 "Waiting for VMs to be delete", total=self.N
@@ -64,7 +64,7 @@ class VMManager:
 
                 progbar.update(task_id, advance=len(completed))
 
-    def create(self, N: int, username: str, ssh_key_file: str):
+    def create(self, N: int, username: str, ssh_key_file: str) -> None:
         for i in range(N):
             name = f"{self.name}-{i}"
             try:
@@ -75,7 +75,7 @@ class VMManager:
 
             vm.set_user(username, ssh_key_file)
 
-    def wait_for_ready(self):
+    def wait_for_ready(self) -> None:
         with Progress() as progbar:
             task_id = progbar.add_task(
                 "Waiting for VMs to be ready", total=self.N
@@ -87,7 +87,29 @@ class VMManager:
                         n += 1
                 progbar.update(task_id, completed=n)
 
-    def run(self, cmd, **kwargs):
+    def run(self, cmd: str, **kwargs: Sequence) -> Tuple[Responses, Responses]:
+        """Run a command on all VMs in parallel
+
+        Runs the specified command on all VMs being managed
+        in parallel using threading. Commands can include
+        formatting wildcards which will be formatted by
+        any keyword arguments passed.
+
+        Args:
+            cmd:
+                The command to execute on the VMs, possibly including
+                wildcard values to be formatted for each VM
+            **kwargs:
+                Named arguments matching the wildcard values in `cmd`
+                which consist of sequences of length matching the
+                number of VMs. For the `i`th VM, the command executed
+                on it will be formatted using the `i`th value from
+                each of the keyword arguments.
+        Returns:
+            A tuple of dictionaries mapping VM names to
+            the stdout and stderr streams from each VM
+        """
+
         # make sure that any keyword arguments we specified
         # for formatting have the proper number of args
         for arg_name, args in kwargs.items():
@@ -110,9 +132,12 @@ class VMManager:
 
             # submit the run command on each one of the vms
             for i, vm in enumerate(self._resources):
+                # format the command with any arguments first
                 formatted = cmd.format(
                     **{arg_name: arg[i] for arg_name, arg in kwargs.items()}
                 )
+
+                # submit the formatted command
                 future = ex.submit(vm.run, formatted)
                 futures.append(future)
 
@@ -165,7 +190,7 @@ class VMManager:
 
 @dataclass
 class VMInstance(Resource):
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._ip = None
         self._start_time = time.time()
         self._is_ready = False
@@ -174,12 +199,12 @@ class VMInstance(Resource):
         self.ssh_key_file = None
 
     @property
-    def ip(self):
+    def ip(self) -> Optional[str]:
         if self._ip is not None:
             return self._ip
 
     @property
-    def message(self):
+    def message(self) -> str:
         return f"VM {self.name}"
 
     def set_user(self, username: str, ssh_key_file: str):
@@ -247,18 +272,64 @@ class VMInstance(Resource):
 
     def run(
         self,
-        *cmds,
+        *cmds: str,
         username: Optional[str] = None,
         ssh_key_file: Optional[str] = None,
     ) -> Union[Tuple[Response, Response], Tuple[Responses, Responses]]:
+        """Run a set of commands on a remote VM instance
+
+        Run the provided commands sequentially on this
+        remote VM instance via SSH, optionally using a
+        specified set of user credentials. No attempt to
+        parse errors is made, so all commands will be
+        executing even if previous commands fail.
+
+        Args:
+            *cmds:
+                The commands to execute on the remote VM
+            username:
+                The user to connect to the remote VM as. If left
+                as `None`, `VMInstance.username` will be used
+                as the default, so ensure that this has been set
+                via `VMInstance.set_user`
+            ssh_key_file:
+                A private ssh key used to connect to the VM. If
+                left as `None`, `VMInstance.ssh_key_file` will be
+                used as the default, so ensure that this has been
+                set via `VMInstance.set_user`
+        Returns:
+            If only one command is specified, the decoded string
+            values of stdout and stderr from the machine will be
+            returned as a tuple, with `None` used to replace
+            blank strings from either. If multiple commands are
+            specified, these tuples will be returned as a list
+            for each command.
+        """
+
         with self.connect(
             scp=False, username=username, ssh_key_file=ssh_key_file
         ) as client:
             stdouts, stderrs = [], []
             for cmd in cmds:
+                logger.debug(
+                    "VM {}:{} executing command {}".format(
+                        self.name, self.ip, cmd
+                    )
+                )
+
                 _, stdout, stderr = client.exec_command(cmd)
-                stderrs.append(stderr.read().decode() or None)
-                stdouts.append(stdout.read().decode() or None)
+                stdout = stdout.read().decode()
+                stderr = stderr.read().decode()
+
+                logger.debug(
+                    "VM {}:{} stdout {}".format(self.name, self.ip, stdout)
+                )
+                logger.debug(
+                    "VM {}:{} stderr {}".format(self.name, self.ip, stderr)
+                )
+
+                stderrs.append(stdout or None)
+                stdouts.append(stderr or None)
 
             # if we're just running one command, return
             # the outputs unvarnished
