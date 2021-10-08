@@ -87,7 +87,16 @@ class VMManager:
                         n += 1
                 progbar.update(task_id, completed=n)
 
-    def run(self, cmd, *kwargs):
+    def run(self, cmd, **kwargs):
+        # make sure that any keyword arguments we specified
+        # for formatting have the proper number of args
+        for arg_name, args in kwargs.items():
+            if len(args) != self.N:
+                raise ValueError(
+                    "Found too many values for argument {}. "
+                    "Expected {}, found {}".format(arg_name, self.N, len(args))
+                )
+
         # TODO: what's a more intelligent way of handling this?
         n_jobs = min(self.N, 32)
         futures = []
@@ -100,8 +109,12 @@ class VMManager:
             )
 
             # submit the run command on each one of the vms
-            for vm in self._resources:
-                futures.append(ex.submit(vm.run, cmd))
+            for i, vm in enumerate(self._resources):
+                formatted = cmd.format(
+                    **{arg_name: arg[i] for arg_name, arg in kwargs.items()}
+                )
+                future = ex.submit(vm.run, formatted)
+                futures.append(future)
 
             stdouts, stderrs, exceptions = {}, {}, {}
             while not progbar.finished:
