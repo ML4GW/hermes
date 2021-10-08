@@ -38,8 +38,8 @@ class VMManager:
         raise NotImplementedError
 
     @contextmanager
-    def manage(self, N):
-        self.create(N)
+    def manage(self, N: int, username: str, ssh_key_file: str):
+        self.create(N, username, ssh_key_file)
         self.wait_for_ready()
 
         try:
@@ -66,7 +66,7 @@ class VMManager:
 
     def create(self, N: int, username: str, ssh_key_file: str):
         for i in range(N):
-            name = self.name + f"-{i}"
+            name = f"{self.name}-{i}"
             try:
                 vm = self.resources[name]
             except KeyError:
@@ -87,7 +87,7 @@ class VMManager:
                         n += 1
                 progbar.update(task_id, completed=n)
 
-    def run(self, cmd):
+    def run(self, cmd, *kwargs):
         # TODO: what's a more intelligent way of handling this?
         n_jobs = min(self.N, 32)
         futures = []
