@@ -172,6 +172,48 @@ class PipelineProcess(mp.Process):
     def __next__(self) -> "Package":
         return self._impatient_get(self.out_q)
 
+    def __rshift__(self, child) -> "PipelineProcess":
+        if isinstance(child, Pipeline):
+            child.processes[0].in_q = self.out_q
+            processes = [self] + child.processes
+            return Pipeline(processes)
+        elif isinstance(child, PipelineProcess):
+            child.in_q = self.out_q
+            return Pipeline([self, child])
+        else:
+            raise TypeError(
+                "Unsupported operand type(s) for >> "
+                "PipelineProcess and {}".format(type(child))
+            )
+
+
+class Pipeline:
+    def __init__(self, processes):
+        self.processes = processes
+
+    def __enter__(self):
+        for p in self.processes:
+            p.__enter__()
+        return self
+
+    def __exit__(self, *exc_args):
+        for p in self.processes:
+            p.__exit__(*exc_args)
+
+    def __iter__(self):
+        return iter(self.processes[-1])
+
     def __rshift__(self, child):
-        child.in_q = self.out_q
-        return child.out_q
+        if isinstance(child, PipelineProcess):
+            child.in_q = self.processes[-1].out_q
+            processes = self.processes + [child]
+            return Pipeline(processes)
+        elif isinstance(child, Pipeline):
+            child.processes[0].in_q = self.processes[-1].out_q
+            processes = self.processes + child.processes
+            return Pipeline(processes)
+        else:
+            raise TypeError(
+                "Unsupported operand type(s) for >> "
+                "Pipeline and {}".format(type(child))
+            )

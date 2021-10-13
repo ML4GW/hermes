@@ -1,3 +1,3 @@
 from .client import InferenceClient
-from .process import PipelineProcess
+from .process import Pipeline, PipelineProcess
 from .utils import ExceptionWrapper, Package

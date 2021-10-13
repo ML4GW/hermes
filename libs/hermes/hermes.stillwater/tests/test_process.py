@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from hermes.stillwater.process import PipelineProcess
+from hermes.stillwater.process import Pipeline, PipelineProcess
 from hermes.stillwater.utils import ExceptionWrapper
 
 
@@ -27,6 +27,11 @@ class RangeProcess(PipelineProcess):
             n = self.n + 0
             self.n += 1
             return n
+
+
+class AddOneProcess(PipelineProcess):
+    def get_package(self):
+        return super().get_package() + 1
 
 
 def test_process(throttle_tol=0.15):
@@ -77,25 +82,85 @@ def test_process(throttle_tol=0.15):
         with ErrorProcess(name="error_process") as process:
             next(iter(process))
 
+
+@pytest.mark.depends(on=["test_process"])
+def test_pipeline():
+    generator = RangeProcess(100, name="generator")
+    returner = PipelineProcess(name="returner")
+
+    # validate basic pipeline behavior
+    returner.in_q = generator.out_q
+    with Pipeline([generator, returner]) as pipeline:
+        i = 0
+        for j in pipeline:
+            assert j == i
+            i += 1
+
+    # now validate pipeline piping into process
+    generator = RangeProcess(100, name="generator")
+    returner = PipelineProcess(name="returner")
+    one_adder = AddOneProcess(name="add_one")
+
+    returner.in_q = generator.out_q
+    pipeline = Pipeline([generator, returner])
+    with pipeline >> one_adder as pipeline:
+        i = 1
+        for j in pipeline:
+            assert j == i
+            i += 1
+
+    # now validate pipeline to pipeline piping
+    generator = RangeProcess(100, name="generator")
+    returner = PipelineProcess(name="returner")
+    one_adder = AddOneProcess(name="add_one")
+    generator.out_q = returner.in_q
+    returner.out_q = one_adder.in_q
+    pipeline_1 = Pipeline([generator, returner, one_adder])
+
+    one_adder_2 = AddOneProcess(name="add_one_2")
+    returner_2 = PipelineProcess(name="returner_2")
+    one_adder_2.out_q = returner_2.in_q
+    pipeline_2 = Pipeline([one_adder_2, returner_2])
+
+    with pipeline_1 >> pipeline_2 as pipeline:
+        i = 2
+        for j in pipeline:
+            assert j == i
+            i += 1
+
+    # now make sure that an error gets raised if
+    # we try to pipe to anything else
+    with pytest.raises(TypeError):
+        returner = Pipeline(name="returner")
+        returner >> "bad type"
+
+
+@pytest.mark.depends(on=["test_pipeline"])
+def test_process_piping():
     # test the piping system for connecting
     # one process to the another, using a process
     # that just iterates through a range and another
     # that just returns whatever it's passed unchanged
-    range_process = RangeProcess(100, name="range_process")
-    id_process = PipelineProcess(name="id_process")
-    q = range_process >> id_process
-
-    # start both the processes then iterate through
-    # the output queue of the second one and make
-    # sure all the indices are in order
-    with range_process, id_process:
-        for i in range(100):
-            j = q.get(1)
+    generator = RangeProcess(100, name="generator")
+    returner = PipelineProcess(name="returner")
+    with generator >> returner as pipeline:
+        i = 0
+        for j in pipeline:
             assert i == j
+            i += 1
 
-        # make sure that the last item passed
-        # is a stop iteration
-        with pytest.raises(StopIteration):
-            exc = q.get(1)
-            if isinstance(exc, ExceptionWrapper):
-                exc.reraise()
+    # now test process to pipeline piping
+    generator = RangeProcess(100, name="generator")
+    returner = PipelineProcess(name="returner")
+    one_adder = AddOneProcess(name="add_one")
+    pipeline = returner >> one_adder
+
+    with generator >> pipeline as pipeline:
+        i = 1
+        for j in pipeline:
+            assert i == j
+            i += 1
+
+    with pytest.raises(TypeError):
+        returner = PipelineProcess(name="returner")
+        returner >> "bad type"
