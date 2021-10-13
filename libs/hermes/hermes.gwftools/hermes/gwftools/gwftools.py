@@ -149,7 +149,7 @@ class GCSFrameDownloader(PipelineProcess):
         # create the indicated download directory
         # if doesn't already exist
         if write_dir is not None and not os.path.exists(write_dir):
-            os.mkdirs(write_dir)
+            os.makedirs(write_dir)
         self.write_dir = write_dir
 
         super().__init__(*args, **kwargs)
