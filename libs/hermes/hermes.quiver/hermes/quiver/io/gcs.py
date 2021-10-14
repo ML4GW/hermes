@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 try:
     from google.api_core.exceptions import Forbidden, NotFound
@@ -98,7 +98,7 @@ class GCSFileSystem(FileSystem):
             if "/" in blob.name.replace(path, "", 1):
                 return True
 
-    def list(self, path: Optional[str] = None) -> list[str]:
+    def list(self, path: Optional[str] = None) -> List[str]:
         if path is not None and self.root:
             # we specified a path, and we have a root,
             # so join them to make the prefix

@@ -112,12 +112,12 @@ class GCSFrameDownloader(PipelineProcess):
             if blob.name.endswith(".gwf"):
                 timestamp, frame_length = _parse_frame_name(blob.name)
 
-                if t0 is not None and t0 <= timestamp + frame_length:
+                if t0 is not None and t0 < timestamp + frame_length:
                     # if we specified a t0 and this timestamp
                     # is greater than it, check to make sure
                     # that we're not outside of any window
                     # specified by length if one was given
-                    if length is not None and timestamp > t0 + length:
+                    if length is not None and timestamp >= t0 + length:
                         continue
                 elif t0 is not None:
                     # otherwise, if we specified a t0 and
@@ -168,7 +168,7 @@ class GCSFrameDownloader(PipelineProcess):
         return fname
 
 
-def FrameCrawler(PipelineProcess):
+class FrameCrawler(PipelineProcess):
     """Waits for data to become available in the designated directory
 
     Simple process which can be used for LIGO data replay streams
@@ -188,12 +188,18 @@ def FrameCrawler(PipelineProcess):
     """
 
     def __init__(
-        self, data_dir: str, timeout: Optional[float] = None, *args, **kwargs
+        self,
+        data_dir: str,
+        timeout: Optional[float] = None,
+        N: Optional[int] = None,
+        *args,
+        **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
 
         self.data_dir = data_dir
         self.timeout = timeout
+        self.N = N
 
     def run(self):
         # override the parent run briefly to figure
@@ -252,9 +258,13 @@ def FrameCrawler(PipelineProcess):
             sys.exit(1)
 
         # run the normal process target
+        self.n = 0
         super().run()
 
     def get_package(self):
+        if self.n == self.N:
+            raise StopIteration
+
         fname = os.path.join(
             self.data_dir, self.pattern.format(self.timestamp)
         )
@@ -279,6 +289,7 @@ def FrameCrawler(PipelineProcess):
 
         # return the formatted filename for passing
         # to downstream loader processes
+        self.n += 1
         return fname
 
 

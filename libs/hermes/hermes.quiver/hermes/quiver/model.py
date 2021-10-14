@@ -1,6 +1,5 @@
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
 
 from hermes.quiver import Platform
 from hermes.quiver.exporters import Exporter
@@ -85,7 +84,7 @@ class Model:
         return self.repository.fs
 
     @property
-    def versions(self) -> list[int]:
+    def versions(self) -> Sequence[int]:
         """The existing versions of this model in the repository"""
 
         # TODO: implement a `walk` method on the filesystems,
@@ -102,7 +101,7 @@ class Model:
         return versions
 
     @property
-    def inputs(self) -> dict[str, ExposedTensor]:
+    def inputs(self) -> Dict[str, ExposedTensor]:
         """The inputs exposed by this model
 
         Represented by a dictionary mapping from the name
@@ -115,7 +114,7 @@ class Model:
         return inputs
 
     @property
-    def outputs(self) -> dict[str, ExposedTensor]:
+    def outputs(self) -> Dict[str, ExposedTensor]:
         """The outputs exposed by this model
 
         Represented by a dictionary mapping from the name
@@ -177,7 +176,7 @@ class Model:
         self,
         model_fn: Union[Callable, "Model"],
         version: Optional[int] = None,
-        input_shapes: Optional[dict[str, "SHAPE_TYPE"]] = None,
+        input_shapes: Optional[Dict[str, "SHAPE_TYPE"]] = None,
         output_names: Optional[Sequence[str]] = None,
         verbose: int = 0,
         **kwargs,

@@ -30,6 +30,10 @@ url = "https://pypi.ngc.nvidia.com"
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
 
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "debug"
+
 [build-system]
 requires = ["poetry>=1.0"]
 build-backend = "poetry.masonry.api"
