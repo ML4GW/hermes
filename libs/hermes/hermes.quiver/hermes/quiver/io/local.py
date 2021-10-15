@@ -2,7 +2,7 @@ import glob
 import os
 import shutil
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from hermes.quiver.io.exceptions import NoFilesFoundError
 from hermes.quiver.io.file_system import FileSystem
@@ -33,7 +33,7 @@ class LocalFileSystem(FileSystem):
         path = self.join(self.root, path)
         return os.path.isdir(path)
 
-    def list(self, path: Optional[str] = None) -> list[str]:
+    def list(self, path: Optional[str] = None) -> List[str]:
         if path is not None:
             path = self.join(self.root, path)
         return os.listdir(path)

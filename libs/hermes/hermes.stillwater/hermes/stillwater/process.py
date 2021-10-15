@@ -47,7 +47,8 @@ class PipelineProcess(mp.Process):
     def cleanup(self, exc: Exception) -> None:
         """Gracefully clean up the process if an exception is encountered"""
 
-        self.logger.error(f"Encountered {exc.__class__.__name__}: {exc}")
+        if self.logger is not None:
+            self.logger.error(f"Encountered {exc.__class__.__name__}: {exc}")
         self.out_q.put(ExceptionWrapper(exc))
 
         self.stop()
