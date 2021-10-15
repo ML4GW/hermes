@@ -176,7 +176,7 @@ def test_frame_crawler(timeout, tstamp, fformat):
 
 @pytest.fixture
 def fnames(tstamp, fformat):
-    from gwpy.timeseris import TimeSeries
+    from gwpy.timeseries import TimeSeries
 
     write_dir = "tmp"
     if not os.path.exists(write_dir):
