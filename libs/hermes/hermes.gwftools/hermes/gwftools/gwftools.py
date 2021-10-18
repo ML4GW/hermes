@@ -379,6 +379,7 @@ class FrameLoader(PipelineProcess):
         self._idx = 0
         self._frame_idx = 0
         self._data = None
+        self._end_next = False
 
     def load_frame(self) -> np.ndarray:
         # get the name of the next file to load from
@@ -440,9 +441,14 @@ class FrameLoader(PipelineProcess):
         # look ahead at whether we'll need to grab a frame
         # after this timestep so that we can see if this
         # will be the last step that we take
+        # if sequence_end is False and therefore self._end_next
+        # is False, we don't need to try to get another frame
+        # since this will be the last one
         next_stop = stop + self.step_size
-        sequence_start, sequence_end = False, False
-        if self._data is None or next_stop >= self._data.shape[1]:
+        sequence_start, sequence_end = False, self._end_next
+        if (
+            self._data is None or next_stop >= self._data.shape[1]
+        ) and not sequence_end:
             if self._data is None:
                 sequence_start = True
 
@@ -453,11 +459,21 @@ class FrameLoader(PipelineProcess):
                 # super().get_package() raised a StopIteration,
                 # so catch it and indicate that this will be
                 # the last inference that we'll produce
-                sequence_end = True
-
-                # stop trying to create packages after
-                # this one is shipped out
-                self.stop()
+                if next_stop == self._data.shape[1]:
+                    # if the next frame will end precisely at the
+                    # end of our existing data, we'll have one more
+                    # frame to process after this one, so set
+                    # self._end_next to True
+                    self._end_next = True
+                else:
+                    # otherwise, the next frame wouldn't be able
+                    # to fit into the model input, so we're going
+                    # to end here and just accept that we'll have
+                    # some trailing data.
+                    # TODO: should we append with zeros? How will
+                    # this information get passed to whatever process
+                    # is piecing information together at the other end?
+                    sequence_end = True
             else:
                 # otherwise append the new data to whatever
                 # remaining data we have left to go through
@@ -486,5 +502,15 @@ class FrameLoader(PipelineProcess):
 
         # increment the request index for the next request
         self._idx += 1
+        self._frame_idx += 1
 
         return package
+
+    def process(self, package):
+        super().process(package)
+
+        # if this is the last package in the sequence,
+        # raise a StopIteration so that downstream
+        # processes know that we're done here
+        if package.sequence_end:
+            raise StopIteration

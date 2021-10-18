@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from math import ceil, floor
@@ -221,7 +222,7 @@ def test_frame_loader(chunk_size, step_size, sample_rate, fnames):
             loader.in_q.put(fname)
         loader.in_q.put(StopIteration)
 
-        expected_array = np.repeat(np.arange(10), 4096)
+        expected_array = np.repeat(np.arange(10), sample_rate)
         for i, package in enumerate(loader):
             assert package.request_id == i
             assert package.sequence_start == (i == 0)
@@ -235,6 +236,8 @@ def test_frame_loader(chunk_size, step_size, sample_rate, fnames):
             assert (x[0] == expected_value).all()
 
         assert package.sequence_end
-        assert i == (sample_rate * 10 // step_size)
+
+        num_expected_packages = (sample_rate * 10 - chunk_size) // step_size
+        assert i == num_expected_packages
 
     assert len(os.listdir("tmp")) == 0
