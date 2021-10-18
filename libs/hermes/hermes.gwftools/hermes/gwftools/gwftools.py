@@ -379,6 +379,7 @@ class FrameLoader(PipelineProcess):
         self._idx = 0
         self._frame_idx = 0
         self._data = None
+        self._end_next = False
 
     def load_frame(self) -> np.ndarray:
         # get the name of the next file to load from
@@ -441,8 +442,11 @@ class FrameLoader(PipelineProcess):
         # after this timestep so that we can see if this
         # will be the last step that we take
         next_stop = stop + self.step_size
-        sequence_start, sequence_end = False, False
-        if self._data is None or next_stop >= self._data.shape[1]:
+        sequence_start, sequence_end = False, self._end_next
+        if (
+            (self._data is None or next_stop >= self._data.shape[1])
+            and not sequence_end
+        ):
             if self._data is None:
                 sequence_start = True
 
@@ -453,11 +457,10 @@ class FrameLoader(PipelineProcess):
                 # super().get_package() raised a StopIteration,
                 # so catch it and indicate that this will be
                 # the last inference that we'll produce
-                sequence_end = True
-
-                # stop trying to create packages after
-                # this one is shipped out
-                self.stop()
+                if next_stop == self._data.shape[1]:
+                    self._end_next = True
+                else:
+                    sequence_end = True
             else:
                 # otherwise append the new data to whatever
                 # remaining data we have left to go through
@@ -486,5 +489,12 @@ class FrameLoader(PipelineProcess):
 
         # increment the request index for the next request
         self._idx += 1
+        self._frame_idx += 1
 
         return package
+
+    def process(self, package):
+        super().process(package)
+        if package.sequence_end:
+            raise StopIteration
+
