@@ -222,7 +222,11 @@ def _parse_help(args: str, arg_name: str) -> str:
     return doc_str
 
 
-def make_parser(f: Callable, prog: str = None):
+def make_parser(
+    f: Callable,
+    prog: Optional[str] = None,
+    parser: Optional[argparse.ArgumentParser] = None,
+) -> argparse.ArgumentParser:
     """Build an argument parser for a function
 
     Builds an `argparse.ArgumentParser` object by using
@@ -238,7 +242,7 @@ def make_parser(f: Callable, prog: str = None):
             argument parser for
         prog:
             Passed to the `prog` argument of
-            `argparse.ArgumentParser`. If left as None,
+            `argparse.ArgumentParser`. If left as `None`,
             `f.__name__` will be used
     Returns:
         The argument parser for the given function
@@ -269,13 +273,14 @@ def make_parser(f: Callable, prog: str = None):
         except ValueError:
             pass
 
-    # build the parser, using a raw text formatter, so that
-    # any formatting in the argument description is respected
-    parser = argparse.ArgumentParser(
-        prog=prog or f.__name__,
-        description=doc.rstrip(),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+    if parser is None:
+        # build the parser, using a raw text formatter, so that
+        # any formatting in the argument description is respected
+        parser = argparse.ArgumentParser(
+            prog=prog or f.__name__,
+            description=doc.rstrip(),
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
 
     # now iterate through the arguments of f
     # and add them as options to the parser
@@ -336,6 +341,38 @@ def make_parser(f: Callable, prog: str = None):
         name = name.replace("_", "-")
         parser.add_argument(f"--{name}", **kwargs)
     return parser
+
+
+def _make_wrapper(
+    f: Callable, prog: Optional[str] = None, **kwargs
+) -> Callable:
+    parser = make_parser(f, prog)
+    if len(kwargs) > 0:
+        subparsers = parser.add_subparsers(dest="_subprogram", required=True)
+        for func_name, func in kwargs.items():
+            subparser = subparsers.add_parser(func_name)
+            make_parser(func, None, subparser)
+
+    @wraps(f)
+    def wrapper(*args, **kw):
+        if len(args) == len(kw) == 0:
+            kw = vars(parser.parse_args())
+
+        try:
+            subprogram = kw.pop("_subprogram")
+        except KeyError:
+            subprogram = None
+        else:
+            subprogram = kwargs[subprogram]
+            parameters = inspect.signature(subprogram).parameters
+            subkw = {name: kw.pop(name) for name in parameters}
+
+        result = f(*args, **kw)
+        if subprogram is not None:
+            result = subprogram(**subkw)
+        return result
+
+    return wrapper
 
 
 def typeo(*args, **kwargs) -> Callable:
@@ -405,16 +442,7 @@ def typeo(*args, **kwargs) -> Callable:
     # the only argument is the function itself,
     # so just treat this like a simple wrapper
     if len(args) == 1 and isinstance(args[0], Callable):
-        f = args[0]
-        parser = make_parser(f)
-
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if len(args) == len(kwargs) == 0:
-                kwargs = vars(parser.parse_args())
-            return f(*args, **kwargs)
-
-        return wrapper
+        return _make_wrapper(args[0], **kwargs)
     else:
         # we provided arguments to typeo above the
         # decorated function, so wrap the wrapper
@@ -422,15 +450,6 @@ def typeo(*args, **kwargs) -> Callable:
 
         @wraps(typeo)
         def wrapperwrapper(f):
-            parser = make_parser(f, *args, **kwargs)
-
-            # now build the regular wrapper for f
-            @wraps(f)
-            def wrapper(*args, **kwargs):
-                if len(args) == len(kwargs) == 0:
-                    kwargs = vars(parser.parse_args())
-                return f(*args, **kwargs)
-
-            return wrapper
+            return _make_wrapper(f, *args, **kwargs)
 
         return wrapperwrapper

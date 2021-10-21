@@ -107,3 +107,26 @@ def test_typeo():
     # - capture stdout and make sure that help looks ok
     # - catch empty calls with insufficient args and
     #     make sure the expected error happens
+
+
+@pytest.mark.depends(on=["test_typeo"])
+def test_subparsers():
+    d = {}
+
+    def f1(a: int, b: int):
+        return a + b
+
+    def f2(a: int, c: int):
+        return a - c
+
+    @typeo(add=f1, subtract=f2)
+    def f(i: int):
+        d["f"] = i
+
+    sys.argv = [None, "--i", "2", "add", "--a", "1", "--b", "2"]
+    assert f() == 3
+    assert d["f"] == 2
+
+    sys.argv = [None, "--i", "4", "subtract", "--a", "9", "--c", "3"]
+    assert f() == 6
+    assert d["f"] == 4
