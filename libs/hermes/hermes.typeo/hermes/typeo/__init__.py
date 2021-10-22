@@ -1,6 +1,7 @@
 import argparse
 import inspect
 from collections import abc
+from enum import Enum
 from functools import wraps
 from typing import Callable, Optional, Tuple, Union
 
@@ -37,6 +38,23 @@ class _DictParsingAction(argparse.Action):
             k, v = value.split("=")
             dict_value[k] = self._type(v)
         setattr(namespace, self.dest, dict_value)
+
+
+class _EnumAction(argparse.Action):
+    def __init__(self, *args, **kwargs) -> None:
+        self._type = kwargs["type"]
+        kwargs["type"] = str
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
+        if self.nargs == "+":
+            value = []
+            for v in values:
+                value.append(self._type(v))
+        else:
+            value = self._type(values)
+
+        setattr(namespace, self.dest, value)
 
 
 def _enforce_array_like(annotation, type_, name):
@@ -335,6 +353,10 @@ def make_parser(
                 kwargs["required"] = True
             else:
                 kwargs["default"] = param.default
+
+            if issubclass(type_, Enum):
+                kwargs["action"] = _EnumAction
+                kwargs["choices"] = [i.value for i in type_]
 
         # use dashes instead of underscores for
         # argument names
