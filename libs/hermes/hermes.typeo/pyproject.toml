@@ -12,6 +12,7 @@ python = "^3.8"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
+pytest-depends = "^1.0"
 
 # documentation dependencies
 sphinx = "^4.1"

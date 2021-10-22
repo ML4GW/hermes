@@ -362,8 +362,9 @@ class EnsembleModel(Model):
         # some metadata to indicate in which order along
         # the channel axis each one of these lies
         metadata = []
-        for tensor, output in zip(inputs, streaming_model.outputs):
-            self.pipe(streaming_model.outputs[output], tensor)
+        outputs = streaming_model.outputs
+        for tensor, output in zip(inputs, streaming_model.config.output):
+            self.pipe(outputs[output.name], tensor)
             metadata.append(f"{tensor.model.name}/{tensor.name}")
         self.config.parameters["states"].string_value = ",".join(metadata)
 

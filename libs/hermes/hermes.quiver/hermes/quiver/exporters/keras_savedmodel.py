@@ -67,10 +67,10 @@ class KerasSavedModel(Exporter, metaclass=KerasSavedModelMeta):
         for output in model_fn.outputs:
             name = output._keras_history.layer.name
             try:
-                name += "_" + str(layer_idx[name])
                 layer_idx[name] += 1
+                name += "_" + str(layer_idx[name])
             except KeyError:
-                layer_idx[name] = 1
+                layer_idx[name] = 0
 
             output_shapes[name] = output.shape
 

@@ -131,11 +131,11 @@ def make_streaming_input_model(
 
     # construct and call the snapshotter layer
     snapshot_layer = Snapshotter(inputs[0].shape[-1], channels)
-    output = snapshot_layer(input, sequence_start)
+    outputs = snapshot_layer(input, sequence_start)
 
     # build the model
     inputs = [input, sequence_start]
-    snapshotter = tf.keras.Model(inputs=inputs, outputs=output)
+    snapshotter = tf.keras.Model(inputs=inputs, outputs=outputs)
 
     model = repository.add(
         name=name or "snapshotter", platform=Platform.SAVEDMODEL, force=True
