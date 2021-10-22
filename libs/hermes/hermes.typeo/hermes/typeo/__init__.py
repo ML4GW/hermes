@@ -350,7 +350,7 @@ def _make_wrapper(
     if len(kwargs) > 0:
         subparsers = parser.add_subparsers(dest="_subprogram", required=True)
         for func_name, func in kwargs.items():
-            subparser = subparsers.add_parser(func_name)
+            subparser = subparsers.add_parser(func_name.replace("_", "-"))
             make_parser(func, None, subparser)
 
     @wraps(f)
@@ -363,7 +363,7 @@ def _make_wrapper(
         except KeyError:
             subprogram = None
         else:
-            subprogram = kwargs[subprogram]
+            subprogram = kwargs[subprogram.replace("-", "_")]
             parameters = inspect.signature(subprogram).parameters
             subkw = {name: kw.pop(name) for name in parameters}
 
