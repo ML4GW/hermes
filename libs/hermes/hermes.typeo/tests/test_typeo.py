@@ -1,4 +1,5 @@
 import sys
+from enum import Enum
 from typing import List, Optional, Sequence, Tuple, Union
 
 import pytest
@@ -130,3 +131,29 @@ def test_subparsers():
     sys.argv = [None, "--i", "4", "subtract", "--a", "9", "--c", "3"]
     assert f() == 6
     assert d["f"] == 4
+
+
+@pytest.mark.depends(on=["test_typeo"])
+def test_enums():
+    class Member(Enum):
+        SINGER = "Thom"
+        GUITAR = "Jonny"
+        DRUMS = "Phil"
+
+    @typeo
+    def f(member: Member):
+        return member
+
+    sys.argv = [None, "--member", "Thom"]
+    assert f() == Member.SINGER
+
+    sys.argv = [None, "--member", "error"]
+    with pytest.raises(SystemExit):
+        f()
+
+    @typeo
+    def f(members: Sequence[Member]):
+        return members
+
+    sys.argv = [None, "--members", "Thom", "Thom", "Jonny"]
+    assert f() == [Member.SINGER, Member.SINGER, Member.GUITAR]
