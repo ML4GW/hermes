@@ -140,6 +140,8 @@ def test_enums():
         GUITAR = "Jonny"
         DRUMS = "Phil"
 
+    # make sure that the parsed value comes
+    # out as the appropriate Enum instance
     @typeo
     def f(member: Member):
         return member
@@ -147,10 +149,14 @@ def test_enums():
     sys.argv = [None, "--member", "Thom"]
     assert f() == Member.SINGER
 
+    # make sure that it's argparse that
+    # catches if the choice is invalid
     sys.argv = [None, "--member", "error"]
     with pytest.raises(SystemExit):
         f()
 
+    # make sure that sequences of enums get
+    # mapped to lists of the Enum instances
     @typeo
     def f(members: Sequence[Member]):
         return members
