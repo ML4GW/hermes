@@ -432,7 +432,7 @@ class FrameLoader(PipelineProcess):
         if self.remove:
             os.remove(fname)
 
-        return data
+        return data.astype("float32")
 
     def get_package(self) -> Package:
         start = self._frame_idx * self.step_size

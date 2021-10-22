@@ -251,7 +251,7 @@ class InferenceClient(PipelineProcess):
         sequence_start: Optional[bool],
         sequence_end: Optional[bool],
     ) -> Tuple[bool, bool]:
-        if package.x.shape != shape:
+        if package.x.shape != shape[1:]:
             raise ValueError(
                 f"State {name} has shape {package.x.shape}, "
                 f"but expected shape {shape}"
@@ -291,6 +291,9 @@ class InferenceClient(PipelineProcess):
                 time.sleep(1e-3)
             raise
 
+        if isinstance(packages, Package):
+            assert (len(self.inputs) + len(self.states)) == 1
+
         # if we have any non-stateful inputs, set their
         # input value using the corresponding package
         sequence_id, request_id, t0 = None, None, None
@@ -300,6 +303,8 @@ class InferenceClient(PipelineProcess):
                 package = packages[name]
             except KeyError:
                 raise ValueError(f"Missing input {name}")
+            except TypeError:
+                package = packages
 
             # make sure that any sequence id, request id,
             # or timestamps set on the package agree with
@@ -329,6 +334,8 @@ class InferenceClient(PipelineProcess):
                     package = packages[name]
                 except KeyError:
                     raise ValueError(f"Missing state {name}")
+                except TypeError:
+                    package = packages
 
                 # validate the state update matches all
                 # our expectations
@@ -340,7 +347,7 @@ class InferenceClient(PipelineProcess):
                 )
 
                 # add the update to our running list of updates
-                states.append(package.x)
+                states.append(package.x[None])
 
             # if we have more than one state, combine them
             # into a single tensor along the channel axis

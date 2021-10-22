@@ -105,9 +105,12 @@ class PipelineProcess(mp.Process):
                     # don't always have to return lists, but
                     # otherwise call the downstream process
                     # normally
-                    try:
-                        self.process(*inputs)
-                    except TypeError:
+                    if not isinstance(inputs, dict):
+                        try:
+                            self.process(*inputs)
+                        except TypeError:
+                            self.process(inputs)
+                    else:
                         self.process(inputs)
 
         except Exception as e:
