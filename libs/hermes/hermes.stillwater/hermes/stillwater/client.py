@@ -291,6 +291,9 @@ class InferenceClient(PipelineProcess):
                 time.sleep(1e-3)
             raise
 
+        if isinstance(packages, Package):
+            assert len(self.inputs) == 1
+
         # if we have any non-stateful inputs, set their
         # input value using the corresponding package
         sequence_id, request_id, t0 = None, None, None
@@ -300,6 +303,8 @@ class InferenceClient(PipelineProcess):
                 package = packages[name]
             except KeyError:
                 raise ValueError(f"Missing input {name}")
+            except TypeError:
+                package = packages
 
             # make sure that any sequence id, request id,
             # or timestamps set on the package agree with
