@@ -16,11 +16,13 @@ protobuf = "^3.17"
 tensorflow = {version = "^2.3", optional = true}
 torch = {version = "^1.7", optional = true}
 google-cloud-storage = {version = "^1.38", optional = true}
+nvidia-tensorrt = { version = "7.2", optional = true}
 
 [tool.poetry.extras]
 tensorflow = ["tensorflow"]
 torch = ["torch"]
 gcs = ["google-cloud-storage"]
+tensorrt = ["nvidia-tensorrt"]
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
