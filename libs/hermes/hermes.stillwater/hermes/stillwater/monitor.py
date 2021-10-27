@@ -19,15 +19,20 @@ _processes = [
     "compute_input",
     "compute_infer",
     "compute_output",
-    "exec",
+    "request"
 ]
-_prefixes = {
-    p: {
-        "duration": _process_format.format(p, "duration_us"),
-        "count": _process_format.format(p, "count"),
-    }
-    for p in _processes
-}
+
+
+def _get_re(prefix, model, version):
+    return re.compile(
+        "".join([
+            prefix,
+            f'(?P<gpu_id>{_uuid_pattern})",',
+            f'model="{model}",',
+            fr'version="{version}"\}} ',
+            "(?P<value>[0-9.]+)",
+        ])
+    )
 
 
 class ServerMonitor(PipelineProcess):
@@ -41,9 +46,11 @@ class ServerMonitor(PipelineProcess):
         **kwargs,
     ) -> None:
         self.filename = filename
+        if isinstance(ips, str):
+            ips = [ips]
 
         self.res = {}
-        self.tracker = {}
+        self.trackers = {}
         for ip in ips:
             client = triton.InferenceServerClient(f"{ip}:8001")
             config = client.get_model_config(model_name).config
@@ -58,29 +65,20 @@ class ServerMonitor(PipelineProcess):
                     )
                 )
                 models, versions = zip(*mvs)
+                versions = [i if i != -1 else 1 for i in versions]
             else:
                 models = [model_name]
-                versions = [model_version]
+                versions = [model_version or 1]
 
             self.trackers[ip] = {}
             for model, version in zip(models, versions):
-                self.res[model] = {}
-                self.trackers[ip][model] = {}
-                for process, prefixes in _prefixes.items():
-                    self.res[model][process] = {}
+                prefix = _process_format.format("exec", "count")
+                self.res[model] = {"count": _get_re(prefix, model, version)}
+                self.trackers[ip][model] = {"count": {}}
+                for process in _processes:
+                    prefix = _process_format.format(process, "duration_us")
+                    self.res[model][process] = _get_re(prefix, model, version)
                     self.trackers[ip][model][process] = {}
-                    for metric, prefix in prefixes.items():
-                        reg = "".join(
-                            [
-                                prefix,
-                                f'(?P<gpu_id>{_uuid_pattern})",',
-                                f'model="{model}",'
-                                fr'version="{version}"\}} ',
-                                "(?P<value>[0-9.]+)",
-                            ]
-                        )
-                        self.res[model][process][metric] = re.compile(reg)
-                        self.trackers[ip][model][process][metric] = {}
 
         super().__init__(*args, **kwargs)
         self.lock = threading.Lock()
@@ -94,38 +92,51 @@ class ServerMonitor(PipelineProcess):
 
         lines = []
         for model, processes in self.res.items():
-            for process, metrics in processes.items():
-                start = f"{timestamp},{ip},{model},{process}"
-                diffs = defaultdict(defaultdict(dict))
-                for metric, regex in metrics.items():
-                    tracker = self.trackers[ip][model][process][metric]
-                    for gpu_id, value in regex.findall(content):
-                        value = int(value)
-                        try:
-                            last = tracker[gpu_id]
-                        except KeyError:
-                            continue
-                        else:
-                            diff = value - last
-                        finally:
-                            tracker[gpu_id] = value
+            tracker = self.trackers[ip][model]
+            counts = {}
+            for gpu_id, value in processes["count"].findall(content):
+                value = int(float(value))
+                try:
+                    last = tracker["count"][gpu_id]
+                except KeyError:
+                    continue
+                else:
+                    diff = value - last
+                    if diff > 0:
+                        counts[gpu_id] = diff
+                finally:
+                    tracker["count"][gpu_id] = value
 
-                        diffs[gpu_id][metric] = diff
-
-                for gpu_id, metrics in diffs.items():
-                    if metrics["count"] == 0:
+            durs = defaultdict(dict)
+            for process in _processes:
+                for gpu_id, value in processes[process].findall(content):
+                    value = int(float(value))
+                    try:
+                        last = tracker[process][gpu_id]
+                    except KeyError:
                         continue
+                    else:
+                        diff = value - last
+                        durs[gpu_id][process] = diff
+                    finally:
+                        tracker[process][gpu_id] = value
 
-                    line = start + "," + gpu_id
-                    for metric in ["count", "duration"]:
-                        line += "," + str(metrics[metric])
-                    lines.append(line)
+            start = f"{timestamp},{ip},{model}"
+            for gpu_id, processes in durs.items():
+                try:
+                    count = counts[gpu_id]
+                except KeyError:
+                    continue
+                line = start + "," + gpu_id + "," + str(count)
+
+                for process in _processes:
+                    line += "," + str(processes[process])
+                lines.append(line)
         return lines
 
     def write(self, content):
-        with self.lock.acquire():
-            with open(self.filename, "a") as f:
-                f.write(content)
+        with self.lock:
+            self.f.write(content)
 
     def target(self, ip):
         try:
@@ -141,8 +152,11 @@ class ServerMonitor(PipelineProcess):
         self.logger = listener.add_process(self)
         exitcode = 0
         try:
-            self.write("timestamp,ip,model,process,count,duration_us")
-            with futures.ThreadPoolExecutor(len(self.tracker)) as ex:
+            self.f = open(self.filename, "w")
+            header = "timestamp,ip,model,gpu_id,count,"
+            header += ",".join(_processes)
+            self.write(header)
+            with futures.ThreadPoolExecutor(len(self.trackers)) as ex:
                 fs = []
                 for ip in self.trackers.keys():
                     fs.append(ex.submit(self.target, ip))
@@ -152,6 +166,7 @@ class ServerMonitor(PipelineProcess):
             self.cleanup(e)
             exitcode = 1
         finally:
+            self.f.close()
             self.logger.debug("Target completed")
             listener.queue.close()
             listener.queue.join_thread()
