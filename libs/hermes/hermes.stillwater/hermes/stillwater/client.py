@@ -179,6 +179,7 @@ class InferenceClient(PipelineProcess):
                 # for being a snapshotter input, so just
                 # add it as a regular input
                 inputs.append(input)
+
         return inputs, states
 
     def run(self):

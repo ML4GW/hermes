@@ -9,18 +9,20 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-tritonclient = {extras = ["all"], version = "^2.5.0", source = "ngc"}
+tritonclient = {extras = ["all"], version = "^2.5.0", source = "ngc" }
 protobuf = "^3.17"
 
 # optional dependencies
-tensorflow = {version = "^2.3", optional = true}
-torch = {version = "^1.7", optional = true}
-google-cloud-storage = {version = "^1.38", optional = true}
+tensorflow = {version = "^2.3", optional = true }
+torch = {version = "^1.7", optional = true }
+google-cloud-storage = {version = "^1.38", optional = true }
+nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
 
 [tool.poetry.extras]
 tensorflow = ["tensorflow"]
 torch = ["torch"]
 gcs = ["google-cloud-storage"]
+tensorrt = ["nvidia-tensorrt"]
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
