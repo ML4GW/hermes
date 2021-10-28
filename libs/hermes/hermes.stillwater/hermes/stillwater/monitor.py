@@ -124,15 +124,16 @@ class ServerMonitor(PipelineProcess):
                 # if the specified model is an ensemble model,
                 # then use the config to find the names and
                 # versions of the models that we should monitor
-                mvs = list(
-                    set(
-                        [
-                            (step.model_name, step.model_version)
-                            for step in config.ensemble_scheduling.step
-                        ]
+                models, versions = zip(
+                    *list(
+                        set(
+                            [
+                                (step.model_name, step.model_version)
+                                for step in config.ensemble_scheduling.step
+                            ]
+                        )
                     )
                 )
-                models, versions = zip(*mvs)
 
                 # use default value of 1 if config step doesn't
                 # specify a version. TODO: this is _NOT_ good
