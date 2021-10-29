@@ -1,7 +1,7 @@
 import pickle
 from copy import deepcopy
 from tempfile import TemporaryDirectory
-from typing import Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 
 import requests
 
@@ -15,15 +15,18 @@ except ImportError as e:
     _has_trt = False
 
 from hermes.quiver.exporters.torch_onnx import TorchOnnx, TorchOnnxMeta
-from hermes.quiver.model import Model
-from hermes.quiver.model_repository import ModelRepository
 from hermes.quiver.platform import Platform, conventions
 from hermes.quiver.types import SHAPE_TYPE
+
+if TYPE_CHECKING:
+    from hermes.quiver.model import Model
 
 
 class TorchTensorRTMeta(TorchOnnxMeta):
     @property
     def handles(self):
+        from hermes.quiver.model import Model
+
         handle = TorchOnnxMeta.handles.fget(self)
         return (handle, Model)
 
@@ -35,7 +38,7 @@ class TorchTensorRTMeta(TorchOnnxMeta):
 class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
     def __call__(
         self,
-        model_fn: Union[Callable, Model],
+        model_fn: Union[Callable, "Model"],
         version: int,
         input_shapes: Optional[SHAPE_TYPE] = None,
         output_names: Optional[Sequence[str]] = None,
@@ -123,6 +126,8 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             # use temporary directory as context so
             # that it will delete no matter what happens
             with TemporaryDirectory() as d:
+                from hermes.quiver.model_repository import ModelRepository
+
                 repo = ModelRepository(d)
                 model = repo.add("tmp", platform=super().platform)
                 onnx_path = model.export_version(
