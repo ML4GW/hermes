@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 class TorchTensorRTMeta(TorchOnnxMeta):
     @property
     def handles(self):
+        # have to import Model here since model depends
+        # on exporter utils, which imports this
         from hermes.quiver.model import Model
 
         handle = TorchOnnxMeta.handles.fget(self)
@@ -126,6 +128,9 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             # use temporary directory as context so
             # that it will delete no matter what happens
             with TemporaryDirectory() as d:
+                # do import here since model repo depends on
+                # model which depends on exporter
+                # TODO: what's a better way to handle this?
                 from hermes.quiver.model_repository import ModelRepository
 
                 repo = ModelRepository(d)
