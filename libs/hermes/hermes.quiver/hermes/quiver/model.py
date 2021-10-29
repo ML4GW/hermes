@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
 
 from hermes.quiver import Platform
-from hermes.quiver.exporters import Exporter
+from hermes.quiver.exporters.utils import find_exporter
 from hermes.quiver.model_config import ModelConfig
 
 if TYPE_CHECKING:
@@ -126,52 +126,6 @@ class Model:
             outputs[output.name] = ExposedTensor(self, output.name, shape)
         return outputs
 
-    def _find_exporter(self, model_fn: Union[Callable, "Model"]) -> Exporter:
-        """Find an Exporter capable of exporting the given model function
-
-        Recursively iterates through all sublcasses of the `Exporter`
-        class to find the first for which `model_fn` is an instance of
-        `Exporter.handles` and for which `model.platform == Exporter.platform`
-
-        Args:
-            model_fn:
-                The framework-specific function which performs the
-                neural network's input/output mapping
-        Returns:
-            An exporter to export `model_fn` to the format specified
-            by this models' inference platform
-        """
-
-        def _get_all_subclasses(cls):
-            """Utility function for recursively finding all Exporters."""
-            all_subclasses = []
-            for subclass in cls.__subclasses__():
-                all_subclasses.append(subclass)
-                all_subclasses.extend(_get_all_subclasses(subclass))
-            return all_subclasses
-
-        # first try to find an available exporter
-        # than can map from the provided model function
-        # to the desired inference platform
-        for exporter in _get_all_subclasses(Exporter):
-            if exporter.platform == self.platform:
-                try:
-                    if isinstance(model_fn, exporter.handles):
-                        # if this exporter matches our criteria,
-                        # initialize it with this model and return it
-                        return exporter(self.config, self.fs)
-                except ImportError:
-                    # evidently we don't have whatever it handles
-                    # installed, so move on
-                    continue
-        else:
-            raise TypeError(
-                "No registered exporters which map from "
-                "model function type {} to platform {}".format(
-                    type(model_fn), self.platform
-                )
-            )
-
     def export_version(
         self,
         model_fn: Union[Callable, "Model"],
@@ -212,7 +166,7 @@ class Model:
 
         # first find an exporter than can do the
         # appropriate model_fn -> inference platform mapping
-        exporter = self._find_exporter(model_fn)
+        exporter = find_exporter(model_fn, self)
 
         # default version will be the latest
         versions = self.versions
