@@ -78,7 +78,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             if endpoint is None:
                 # do the conversion locally
                 engine = convert_network(
-                    model_binary, config._config, use_fp16
+                    model_binary, self.config._config, use_fp16
                 )
 
                 # CUDA engine build won't raise an error on failure
@@ -113,7 +113,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             self.fs.write(trt_binary, export_path)
             return export_path
 
-        if not isinstance(model_fn, Model):
+        if isinstance(model_fn, self.handles[0]):
             # if we didn't pass a model, then create a dummy
             # temporary model repository to build the ONNX
             # binary that we'll convert and do export with that
@@ -134,13 +134,14 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
                 from hermes.quiver.model_repository import ModelRepository
 
                 repo = ModelRepository(d)
-                model = repo.add("tmp", platform=super().platform)
+                model = repo.add("tmp", platform=Platform.ONNX)
                 onnx_path = model.export_version(
                     model_fn,
                     version=version,
                     input_shapes=input_shapes,
                     output_names=output_names,
                 )
+                onnx_path = repo.fs.join(d, onnx_path)
                 with open(onnx_path, "rb") as f:
                     model_binary = f.read()
 
