@@ -77,19 +77,17 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
 
             if endpoint is None:
                 # do the conversion locally
-                engine = convert_network(
+                trt_binary = convert_network(
                     model_binary, self.config._config, use_fp16
                 )
 
                 # CUDA engine build won't raise an error on failure
                 # but will return None instead, so raise error here
-                if engine is None:
+                if trt_binary is None:
                     raise RuntimeError(
                         "Model conversion failed, consult TRT logs"
                     )
-
-                # serialize the engine to bytes
-                trt_binary = engine.serialize()
+                trt_binary = bytes(trt_binary)
             else:
                 # use a remote conversion service to convert
                 # the onnx binary to a tensorrt one
