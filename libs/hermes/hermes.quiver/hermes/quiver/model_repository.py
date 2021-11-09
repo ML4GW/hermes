@@ -28,7 +28,7 @@ class ModelRepository:
                 )
             except FileNotFoundError:
                 raise ValueError(
-                    f"Failed to initialize repo at {root}"
+                    f"Failed to initialize repo at {root} "
                     f"due to model with missing config {model}"
                 )
 

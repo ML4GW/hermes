@@ -33,7 +33,6 @@ def _convert_network(
     # do some TRT boilerplate initialization
     logger = trt.Logger()
     builder = stack.enter_context(trt.Builder(logger))
-    builder.max_workspace_size = 1 << 28
 
     # if the model config doesn't specify a max
     # batch size, the config's value will read 0,
@@ -48,6 +47,7 @@ def _convert_network(
     # optimization profile for that input with
     # the most optimized batch size being the largest
     config = stack.enter_context(builder.create_builder_config())
+    config.max_workspace_size = 1 << 28
     for input in model_config.input:
         if input.dims[0] != -1:
             # this input doesn't have a variable
@@ -139,4 +139,4 @@ def _convert_network(
     # None. Allowing this to happen so higher-level
     # converters can make decisions about what to
     # do if/when things go wrong
-    return builder.build_cuda_engine(network)
+    return builder.build_serialized_network(network, config)
