@@ -33,7 +33,7 @@ def _convert_network(
     # do some TRT boilerplate initialization
     logger = trt.Logger()
     builder = stack.enter_context(trt.Builder(logger))
- 
+
     # if the model config doesn't specify a max
     # batch size, the config's value will read 0,
     # so replace with 1 as a default here for streaming

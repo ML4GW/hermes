@@ -55,7 +55,7 @@ class VMManager:
     def wait_for_delete(self) -> None:
         with Progress() as progbar:
             task_id = progbar.add_task(
-                "Waiting for VMs to be delete", total=self.N
+                "Waiting for VMs to be deleted", total=self.N
             )
             while self._resources:
                 completed = [vm for vm in self._resources if vm.is_deleted()]
