@@ -187,6 +187,7 @@ class ModelConfig:
         kind: KIND_TYPE = "gpu",
         gpus: GPUS_TYPE = None,
         count: int = 1,
+        name: Optional[str] = None,
     ) -> model_config.ModelInstanceGroup:
         try:
             kind = model_config.ModelInstanceGroup.Kind.Value(
@@ -205,11 +206,47 @@ class ModelConfig:
 
         # intialize a new instance group
         instance_group = model_config.ModelInstanceGroup(
-            kind=kind, gpus=gpus, count=count
+            kind=kind, gpus=gpus, count=count, name=name
         )
         self.instance_group.append(instance_group)
 
         return instance_group
+
+    def scale_instance_group(
+        self, count: int, name: Union[str, int, None] = None
+    ) -> model_config.ModelInstanceGroup:
+        if len(self.instance_groups) == 0:
+            raise ValueError(
+                "Config for model {} has no instance groups "
+                "to scale".format(self.name)
+            )
+
+        if name is None or isinstance(name, int):
+            name = name or 0
+            try:
+                group = self.instance_groups[name]
+            except IndexError:
+                raise IndexError(
+                    "Config for model {} with {} instance groups "
+                    "has no instance group at index {}".format(
+                        self.name, len(self.instance_group), name
+                    )
+                )
+        elif isinstance(name, str):
+            groups = [g.name for g in self.instance_group if g.name == name]
+            if len(groups) == 0:
+                raise ValueError(
+                    "Config for model {} has no instance groups "
+                    "named {}".format(self.name, name)
+                )
+            group = groups[0]
+        else:
+            raise TypeError(
+                "Unexpected type for argument `name` {}".format(type(name))
+            )
+
+        group.count = count
+        return group
 
     def __repr__(self):
         return self._config.__repr__()
