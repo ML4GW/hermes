@@ -61,7 +61,7 @@ class Cluster(ManagerResource):
     def services(self) -> Dict[str, Dict[str, Service]]:
         return dict(self.k8s_client._services)
 
-    def daemon_sets(self) -> Dict[str, dict[str, DaemonSet]]:
+    def daemon_sets(self) -> Dict[str, Dict[str, DaemonSet]]:
         return dict(self.k8s_client._daemon_sets)
 
     @abc.abstractproperty
