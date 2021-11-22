@@ -1,12 +1,26 @@
 import argparse
+import importlib
 import inspect
 from collections import abc
 from enum import Enum
 from functools import wraps
-from typing import Callable, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Optional, Tuple, TypeVar, Union
+
+if TYPE_CHECKING:
+    try:
+        from types import GenericAlias
+    except ImportError:
+        from typing import _GenericAlias as GenericAlias
 
 
-class _DictParsingAction(argparse.Action):
+_LIST_ORIGINS = (list, abc.Sequence)
+_ARRAY_ORIGINS = _LIST_ORIGINS + (tuple,)
+_DICT_ORIGINS = (dict, abc.Mapping)
+_ANNOTATION = Union[type, "GenericAlias"]
+_MAYBE_TYPE = Optional[type]
+
+
+class _MappingParsingAction(argparse.Action):
     """Action for parsing dictionary arguments
 
     Parse dictionary arguments using the form `key=value`,
@@ -35,7 +49,15 @@ class _DictParsingAction(argparse.Action):
 
         dict_value = {}
         for value in values:
-            k, v = value.split("=")
+            try:
+                k, v = value.split("=")
+            except ValueError:
+                raise argparse.ArgumentError(
+                    "Couldn't parse value {} passed to "
+                    "argument {}".format(value, self.dest)
+                )
+
+            # TODO: introduce try-catch here
             dict_value[k] = self._type(v)
         setattr(namespace, self.dest, dict_value)
 
@@ -57,68 +79,132 @@ class _EnumAction(argparse.Action):
         setattr(namespace, self.dest, value)
 
 
-def _enforce_array_like(annotation, type_, name):
-    annotation = annotation.__args__[1]
+class _CallableAction(argparse.Action):
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs["type"] = str
+        super().__init__(*args, **kwargs)
 
-    # for array-like origins, make sure that
-    # the type of the elements of the array
-    # matches the type of the first element
-    # of the Union. Otherwise, we don't know
-    # how to parse the value
-    try:
-        if annotation.__origin__ in (list, abc.Sequence):
-            assert annotation.__args__[0] is type_
-        elif annotation.__origin__ is dict:
-            assert annotation.__args__[1] is type_
-        elif annotation.__origin__ is tuple:
-            for arg in annotation.__args__:
-                assert arg is type_
-        else:
-            raise TypeError(
-                "Arg {} has Union of type {} and type {} "
-                "with unknown origin {}".format(
-                    name, type_, annotation, annotation.__origin__
-                )
+    def _import_callable(self, callable: str) -> Callable:
+        fn, module = callable[::-1].split(".", maxsplit=1)
+        module, fn = module[::-1], fn[::-1]
+
+        try:
+            lib = importlib.import_module(module)
+        except ModuleNotFoundError:
+            raise argparse.ArgumentError(
+                self,
+                "Could not find module {} for callable argument {}".format(
+                    module, self.dest
+                ),
             )
-    except AttributeError:
-        raise TypeError(
-            "Arg {} has Union of types {} and {}".format(
-                name, type_, annotation
+
+        try:
+            # TODO: add inspection of function to make sure it
+            # aligns with the Callable __args__ if there are any
+            return getattr(lib, fn)
+        except AttributeError:
+            raise argparse.ArgumentError(
+                self,
+                "Module {} has no function {} for callable argument {}".format(
+                    module, fn, self.dest
+                ),
+            )
+
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
+        if self.nargs == "+":
+            value = []
+            for v in values:
+                value.append(self._import_callable(v))
+        else:
+            value = self._import_callable(values)
+
+        setattr(namespace, self.dest, value)
+
+
+def _parse_union(param: inspect.Parameter) -> Tuple[type, _MAYBE_TYPE]:
+    annotation = param.annotation
+    if len(annotation.__args__) > 2:
+        raise ValueError(
+            "Can't parse argument {} with annotation {} "
+            "that is a Union of more than 2 types.".format(
+                param.name, annotation
             )
         )
-    return annotation
 
-
-def _parse_union(param):
-    annotation = param.annotation
-    type_ = annotation.__args__[0]
+    # type_ will be the type that we pass to the
+    # parser. second_type can either be `None` or
+    # some array of type_
+    type_, second_type = annotation.__args__
 
     try:
-        if isinstance(None, annotation.__args__[1]):
-            # this is basically a typing.Optional case
-            # make sure that the default is None
-            if param.default is not None:
-                raise ValueError(
-                    "Argument {} with Union of type {} and "
-                    "NoneType must have a default of None".format(
-                        param.name, type_
+        origin = second_type.__origin__
+    except AttributeError:
+        try:
+            # see if the second type in the Union is NoneType
+            if isinstance(None, second_type):
+                # this is basically a typing.Optional case
+                # make sure that the default is None
+                if param.default is not None:
+                    raise ValueError(
+                        "Argument {} with Union of type {} and "
+                        "NoneType must have a default of None".format(
+                            param.name, type_
+                        )
                     )
-                )
-            annotation = type_
-        else:
-            annotation = _enforce_array_like(annotation, type_, param.name)
-    except TypeError as e:
-        if "Subscripted" in str(e):
-            annotation = _enforce_array_like(annotation, type_, param.name)
-        else:
-            raise
+                return type_, None
+        except TypeError:
+            # annotation.__args__[1] is not a type that we
+            # can check `None` as an instance of, so the
+            # `isinstance` check above raises a TypeError.
+            pass
 
-    return annotation
+        # this annotation isn't NoneType and doesn't have an
+        # __origin__, so we can infer that it's not array-like
+        # and we don't know how to parse this arg
+        raise TypeError(
+            "Arg {} has Union of types {} and {}".format(
+                param.name, type_, second_type
+            )
+        )
+
+    def _is_valid(idx=None):
+        try:
+            args = second_type.__args__
+        except AttributeError:
+            # in py3.9, generic aliases with no type
+            # specified won't have __args__ at all,
+            # so this is the same as being TypeVar
+            # in py<3.9 and we're ok
+            return True
+
+        if idx is not None:
+            args = [args[idx]]
+
+        for t in args:
+            if not (t in (type_, Ellipsis) or isinstance(t, TypeVar)):
+                return False
+        return True
+
+    if origin in _LIST_ORIGINS:
+        assert _is_valid(0)
+    elif origin in _DICT_ORIGINS:
+        assert _is_valid(1)
+    elif origin is tuple:
+        assert _is_valid()
+    else:
+        raise TypeError(
+            "Arg {} has Union of type {} and type {} "
+            "with unknown origin {}".format(
+                param.name, type_, second_type, origin
+            )
+        )
+
+    return second_type, type_
 
 
 def _get_origin_and_type(
-    annotation: type,
-) -> Tuple[Optional[type], Optional[type]]:
+    annotation: _ANNOTATION, type_: _MAYBE_TYPE = None
+) -> Tuple[_MAYBE_TYPE, _MAYBE_TYPE]:
     """Utility for parsing the origin of an annotation
 
     Returns:
@@ -129,19 +215,16 @@ def _get_origin_and_type(
     """
 
     try:
-        origin = annotation.__origin__
-        type_ = None
+        return annotation.__origin__, type_
     except AttributeError:
         # annotation has no origin, so assume it's
         # a valid type on its own
-        origin = None
-        type_ = annotation
-    return origin, type_
+        return None, annotation
 
 
 def _parse_array_like(
-    annotation: type, origin: Optional[type], kwargs: dict
-) -> Optional[type]:
+    annotation: _ANNOTATION, origin: _MAYBE_TYPE, kwargs: dict, type_: type
+) -> _MAYBE_TYPE:
     """Make sure array-like typed arguments pass the right type to the parser
 
     For an annotation with an origin, do some checks on the
@@ -160,38 +243,61 @@ def _parse_array_like(
             used to add an argument to the parser
     """
 
-    if origin in (list, tuple, dict, abc.Sequence):
+    if origin in _ARRAY_ORIGINS + _DICT_ORIGINS:
         kwargs["nargs"] = "+"
-        if origin is dict:
-            kwargs["action"] = _DictParsingAction
+        try:
+            args = annotation.__args__
+        except AttributeError:
+            args = None
+
+        if origin in _DICT_ORIGINS:
+            kwargs["action"] = _MappingParsingAction
+            if args is None or isinstance(args[0], TypeVar):
+                return type_
 
             # make sure that the expected type
             # for the dictionary key is string
-            # TODO: add kwarg for parsing non-int
+            # TODO: add kwarg for parsing non-str
             # dictionary keys
-            assert annotation.__args__[0] is str
+            assert args[0] is str
 
             # the type used to parse the values for
             # the dictionary will be the type passed
             # the parser action
-            type_ = annotation.__args__[1]
+            type_ = args[1]
         else:
-            type_ = annotation.__args__[0]
+            try:
+                if args is None or isinstance(args[0], TypeVar):
+                    # args being None indicates untyped lists
+                    # and tuples in py3.9, and args[0] being
+                    # TypeVar indicates untyped lists in py3.8
+                    return type_
+                type_ = args[0]
+            except IndexError:
+                # untyped Tuples in py3.8 will have an empty __args__
+                return type_
 
             # for tuples make sure that everything
             # has the same type
             if origin is tuple:
-                # TODO: use a custom action to verify
-                # the number of arguments and map to
-                # a tuple
-                for arg in annotation.__args__[1:]:
-                    if arg is not Ellipsis:
-                        assert arg == type_
-
+                # TODO: use a custom action to verify the
+                # number of arguments and map to a tuple
+                try:
+                    for arg in annotation.__args__[1:]:
+                        if arg is not Ellipsis:
+                            assert arg == type_
+                except IndexError:
+                    # if the Tuple only has one arg, we don't need
+                    # to worry about checking everything else
+                    pass
         return type_
+    elif origin is abc.Callable:
+        return origin
     elif origin is not None:
         # this is a type with some unknown origin
         raise TypeError(f"Can't help with arg of type {origin}")
+    else:
+        return type_
 
 
 def _parse_help(args: str, arg_name: str) -> str:
@@ -315,18 +421,25 @@ def make_parser(
         # if the annotation can have multiple types,
         # figure out which type to pass to the parser
         if origin is Union:
-            annotation = _parse_union(param)
+            annotation, type_ = _parse_union(param)
 
             # check the chosen type again to
             # see if it's a container of some kind
-            origin, type_ = _get_origin_and_type(annotation)
+            origin, type_ = _get_origin_and_type(annotation, type_)
 
         # if the origin of the annotation is array-like,
         # indicate that there will be multiple args in the kwargs
         # and return the appropriate type. This returns `None`
         # if there's no origin to process, in which case we just
         # keep using `type_`
-        type_ = _parse_array_like(annotation, origin, kwargs) or type_
+        type_ = _parse_array_like(annotation, origin, kwargs, type_)
+
+        # our last origin check to see if type_ is typing.Callable,
+        # in which case the origin will be abc.Callable whic
+        # is the type that we want
+        origin, type_ = _get_origin_and_type(type_)
+        if origin is not None:
+            type_ = origin
 
         # add the argument docstring to the parser help
         kwargs["help"] = _parse_help(args, name)
@@ -354,7 +467,9 @@ def make_parser(
             else:
                 kwargs["default"] = param.default
 
-            if issubclass(type_, Enum):
+            if type_ is abc.Callable:
+                kwargs["action"] = _CallableAction
+            elif type_ is not None and issubclass(type_, Enum):
                 kwargs["action"] = _EnumAction
                 kwargs["choices"] = [i.value for i in type_]
 
