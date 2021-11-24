@@ -1,6 +1,8 @@
 import argparse
 import importlib
-from typing import Callable
+from typing import Callable, Mapping, Optional
+
+import toml
 
 
 class MappingAction(argparse.Action):
@@ -103,3 +105,78 @@ class CallableAction(argparse.Action):
             value = self._import_callable(values)
 
         setattr(namespace, self.dest, value)
+
+
+class TypeoTomlAction(argparse.Action):
+    def __init__(
+        self, *args, bools: Optional[Mapping[str, bool]] = None, **kwargs
+    ) -> None:
+        self.bools = bools
+        assert kwargs["nargs"] == "?"
+        super().__init__(*args, **kwargs)
+
+    def _parse_section(self, section):
+        args = ""
+        for arg, value in section.items():
+            bool_default = None
+            if self.bools is not None:
+                try:
+                    bool_default = self.bools[arg]
+                except KeyError:
+                    pass
+
+            if bool_default is None and isinstance(value, bool):
+                raise argparse.ArgumentError(
+                    self,
+                    "Can't parse non-boolean argument "
+                    "'{}' with value {}".format(arg, value),
+                )
+            elif bool_default is not None and bool_default == value:
+                continue
+
+            args += "--" + arg.replace("_", "-") + " "
+            if isinstance(value, bool):
+                continue
+            elif isinstance(value, dict):
+                for k, v in value.items():
+                    args += f"{k}={v} "
+            elif isinstance(value, list):
+                args += " ".join(map(str, value)) + " "
+            else:
+                args += str(value) + " "
+        return args
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        if value is None:
+            value = "pyproject.toml"
+
+        try:
+            filename, command = value.split("::")
+        except ValueError:
+            if value.startswith("::"):
+                command = value.strip(":")
+                filename = "pyproject.toml"
+            else:
+                filename = value
+                command = None
+
+        with open(filename, "r") as f:
+            config = toml.load(f)
+
+        try:
+            config = config["typeo"]
+        except KeyError:
+            pass
+
+        try:
+            commands = config.pop("commands")[command]
+        except KeyError:
+            commands = None
+
+        args = self._parse_section(config)
+        if command is not None:
+            args += command + " "
+            if commands is not None:
+                args += self._parse_section(commands)
+
+        setattr(namespace, self.dest, args.split())

@@ -5,7 +5,7 @@ from enum import Enum
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, Optional, Tuple, TypeVar, Union
 
-from hermes.typeo.actions import CallableAction, EnumAction, MappingAction
+import hermes.typeo.actions as actions
 
 if TYPE_CHECKING:
     try:
@@ -151,7 +151,7 @@ def _parse_array_like(
             args = None
 
         if origin in _DICT_ORIGINS:
-            kwargs["action"] = MappingAction
+            kwargs["action"] = actions.MappingAction
             if args is None or isinstance(args[0], TypeVar):
                 return type_
 
@@ -250,6 +250,7 @@ def make_parser(
     f: Callable,
     prog: Optional[str] = None,
     parser: Optional[argparse.ArgumentParser] = None,
+    parent_parser: Optional[argparse.ArgumentParser] = None,
 ) -> argparse.ArgumentParser:
     """Build an argument parser for a function
 
@@ -304,10 +305,12 @@ def make_parser(
             prog=prog or f.__name__,
             description=doc.rstrip(),
             formatter_class=argparse.RawDescriptionHelpFormatter,
+            parents=[parent_parser] if parent_parser is not None else None,
         )
 
     # now iterate through the arguments of f
     # and add them as options to the parser
+    booleans = {}
     for name, param in inspect.signature(f).parameters.items():
         annotation = param.annotation
         kwargs = {}
@@ -350,11 +353,13 @@ def make_parser(
                 # provide a default, assume that setting it
                 # as a flag indicates a `True` status
                 kwargs["action"] = "store_true"
+                booleans[name] = False
             else:
                 # otherwise set the action to be the
                 # _opposite_ of whatever the default is
                 # so that if it's not set, the default
                 # becomes the values
+                booleans[name] = param.default
                 action = str(not param.default).lower()
                 kwargs["action"] = f"store_{action}"
         else:
@@ -368,32 +373,55 @@ def make_parser(
                 kwargs["default"] = param.default
 
             if type_ is abc.Callable:
-                kwargs["action"] = CallableAction
+                kwargs["action"] = actions.CallableAction
             elif type_ is not None and issubclass(type_, Enum):
-                kwargs["action"] = EnumAction
+                kwargs["action"] = actions.EnumAction
                 kwargs["choices"] = [i.value for i in type_]
 
         # use dashes instead of underscores for
         # argument names
         name = name.replace("_", "-")
         parser.add_argument(f"--{name}", **kwargs)
-    return parser
+    return parser, booleans
 
 
 def _make_wrapper(
     f: Callable, prog: Optional[str] = None, **kwargs
 ) -> Callable:
-    parser = make_parser(f, prog)
+    parent_parser = argparse.ArgumentParser(
+        prog="config-parser", add_help=False, conflict_handler="resolve"
+    )
+    parser, booleans = make_parser(f, prog, None, parent_parser)
     if len(kwargs) > 0:
         subparsers = parser.add_subparsers(dest="_subprogram", required=True)
         for func_name, func in kwargs.items():
             subparser = subparsers.add_parser(func_name.replace("_", "-"))
-            make_parser(func, None, subparser)
+            _, bools = make_parser(func, None, subparser, None)
+            booleans.update(bools)
+
+    parent_parser.add_argument(
+        "--typeo",
+        bools=booleans,
+        nargs="?",
+        required=False,
+        default=None,
+        action=actions.TypeoTomlAction,
+    )
 
     @wraps(f)
     def wrapper(*args, **kw):
         if len(args) == len(kw) == 0:
-            kw = vars(parser.parse_args())
+            config_args, remainder = parent_parser.parse_known_args()
+
+            if config_args.typeo is not None:
+                if remainder:
+                    raise ValueError(
+                        "Found additional arguments '{}' when passing "
+                        "typeo config".format(remainder)
+                    )
+                kw = vars(parser.parse_args(config_args.typeo))
+            else:
+                kw = vars(parser.parse_args(remainder))
 
         try:
             subprogram = kw.pop("_subprogram")
