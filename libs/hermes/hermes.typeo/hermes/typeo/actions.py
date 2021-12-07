@@ -1,5 +1,6 @@
 import argparse
 import importlib
+import os
 from typing import Callable, Mapping, Optional
 
 import toml
@@ -146,37 +147,150 @@ class TypeoTomlAction(argparse.Action):
                 args += str(value) + " "
         return args
 
+    def _get_sections(self, config, section, command, filename):
+        try:
+            # check to see if there are any script-specific
+            # config sections at all
+            scripts = config.pop("scripts")
+        except KeyError:
+            scripts = None
+            if section is not None and command is not None:
+                # if we specified both a script _and_ a command for
+                # that script, but there's no script section
+                # to pull commands from, we don't know where to
+                # get our args from, so I think all we can do is
+                # raise an error here
+                raise argparse.ArgumentError(
+                    self,
+                    "Specified script '{}' and command '{}', but"
+                    "no 'script' table in config file '{}'".format(
+                        section, command, filename
+                    ),
+                )
+            elif command is not None:
+                # if we specified a command and not a script,
+                # then see if there are args associated with
+                # that command at the `typeo` level of the config
+                try:
+                    commands = config.pop("commands")[command]
+                except KeyError:
+                    commands = None
+            else:
+                commands = None
+        else:
+            # if we do have a `scripts` section of the config,
+            # see if we have args associated with the script
+            # we passed at the command line
+            try:
+                scripts = scripts[section]
+            except KeyError:
+                # if not, then there will be no script-specific
+                # args passed _or_ args passed to the indicated
+                # command (which could be fine if the command can
+                # run without any args. That will be decided by
+                # the actual typeo parser at parse time)
+                scripts, commands = None, None
+            else:
+                # see if we have any command-specific arguments
+                # for the indicated script
+                try:
+                    commands = scripts.pop("commands")[command]
+                except KeyError:
+                    commands = None
+        return scripts, commands
+
     def __call__(self, parser, namespace, value, option_string=None):
         if value is None:
             value = "pyproject.toml"
 
+        # allow specification of the form filename(:script)(:command),
+        # where `script` and `command` are optional and
+        # - `script` specifies a sub-table of the `typeo` table
+        #   in the config file that has arguments specific to
+        #   a particular script that's part of the project. A
+        #   blank argument here (i.e. either `filename` or
+        #   `filename::comand`) will only pull arguments from
+        #   the `typeo` section of the config
+        # - `command` indicates a particular command for
+        #   the indicated script
         try:
-            filename, command = value.split("::")
+            filename, section, command = value.split(":")
         except ValueError:
-            if value.startswith("::"):
-                command = value.strip(":")
-                filename = "pyproject.toml"
-            else:
+            # we have at most one colon in `value`, so
+            # command is definitely blank
+            command = None
+
+            # try a single split to see if we specified
+            # a script subsection of the config
+            try:
+                filename, section = value.split(":")
+            except ValueError:
+                # no colons at all, so just use the filename
                 filename = value
-                command = None
+                section = None
+        else:
+            # if section is the empty string, we have a
+            # filename::command, so there's no script subsection
+            section = section or None
 
-        with open(filename, "r") as f:
-            config = toml.load(f)
+        if filename == "":
+            # if filename is now the empty string, we indicated
+            # a subsection and/or a command, but no file. So
+            # default to using pyproject.toml
+            filename = "pyproject.toml"
+        elif os.path.isdir(filename):
+            # if `filename` is a directory, look for a
+            # pyproject.toml at that location
+            filename = os.path.join(filename, "pyproject.toml")
 
+        try:
+            # try to load the config file
+            with open(filename, "r") as f:
+                config = toml.load(f)
+        except FileNotFoundError:
+            dirname = os.path.dirname(filename) or "."
+            basename = os.path.basename(filename)
+            raise argparse.ArgumentError(
+                self,
+                "Could not find typeo config file {} in directory {}".format(
+                    basename, dirname
+                ),
+            )
+
+        if os.path.basename(filename) == "pyproject.toml":
+            # if the config file is a pyproject.toml from
+            # anywhere, assume that the file uses the
+            # standard that all tool configs fall in a
+            # `tool` table in the config file
+            config = config["tool"]
+
+        # now grab the typeo-specific config
         try:
             config = config["typeo"]
         except KeyError:
-            pass
+            raise argparse.ArgumentError(
+                self, f"No 'typeo' section in config file {filename}"
+            )
 
-        try:
-            commands = config.pop("commands")[command]
-        except KeyError:
-            commands = None
+        scripts, commands = self._get_sections(
+            config, section, command, filename
+        )
 
+        # start by parsing the root typeo-level config options
         args = self._parse_section(config)
+
+        if scripts is not None:
+            # if there are any script-specific args to parse,
+            # parse them out of the corresponding section
+            args += self._parse_section(scripts)
+
         if command is not None:
+            # we specified a command, so add it as a positional
+            # argument _after_ all the global arguments
             args += command + " "
             if commands is not None:
+                # add in any command-specific arguments after the
+                # command argument has been specified
                 args += self._parse_section(commands)
 
         setattr(namespace, self.dest, args.split())

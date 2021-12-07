@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hermes.typeo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Utilities for running functions as scripts"
 authors = ["Alec Gunny <alec.gunny@gmail.com>"]
 packages = [
