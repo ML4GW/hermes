@@ -31,6 +31,7 @@ class Throttle:
     target_rate: float
     alpha: float = 0.9
     condition: Optional[Callable] = None
+    update_every: int = 100
 
     def __post_init__(self):
         self._n = 0
@@ -49,9 +50,6 @@ class Throttle:
         return (1 / self.target_rate) - self._delta
 
     def update(self):
-        self._last_time = time.time()
-        self._n += 1
-
         diff = (1 / self.rate) - (1 / self.target_rate)
         self._delta = self._delta + (1 - self.alpha) * diff
 
@@ -66,7 +64,11 @@ class Throttle:
 
         while (time.time() - self._last_time) < self.sleep_time:
             time.sleep(1e-6)
-        self.update()
+
+        self._n += 1
+        self._last_time = time.time()
+        if self._n % self.update_every == 0:
+            self.update()
 
 
 @dataclass

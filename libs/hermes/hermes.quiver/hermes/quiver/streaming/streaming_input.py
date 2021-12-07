@@ -2,9 +2,8 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Optional, Sequence
 
 import tensorflow as tf
-from tritonclient.grpc import model_config_pb2 as model_config
 
-from hermes.quiver.platform import Platform
+from hermes.quiver.streaming import utils as streaming_utils
 
 if TYPE_CHECKING:
     from hermes.quiver import Model, ModelRepository
@@ -46,6 +45,12 @@ class Snapshotter(tf.keras.layers.Layer):
                 "Number of channels specified {} doesn't "
                 "match number of channels found {}".format(
                     num_channels, input_shape[1]
+                )
+            )
+        if input_shape[-1] > self.snapshot_size:
+            raise ValueError(
+                "Update size {} cannot be larger than snapshot size {}".format(
+                    input_shape[-1], self.snapshot_size
                 )
             )
 
@@ -110,79 +115,12 @@ def make_streaming_input_model(
 
     # TODO: support 2D streaming
     channels = OrderedDict([(x.model.name, x.shape[1]) for x in inputs])
-
-    # construct the inputs to the model
-    input = tf.keras.Input(
-        name="stream",
-        shape=(sum(channels.values()), stream_size),
-        batch_size=1,  # TODO: other batch sizes
-        dtype=tf.float32,
-    )
-
-    # include an input which is used to indicate
-    # whether a new sequence is beginning to
-    # clear the state
-    sequence_start = tf.keras.Input(
-        name="sequence_start",
-        type_spec=tf.TensorSpec(
-            shape=(1,), name="sequence_start"  # TODO: batch size
-        ),
-    )
-
-    # construct and call the snapshotter layer
     snapshot_layer = Snapshotter(inputs[0].shape[-1], channels)
-    outputs = snapshot_layer(input, sequence_start)
-
-    # build the model
-    inputs = [input, sequence_start]
-    snapshotter = tf.keras.Model(inputs=inputs, outputs=outputs)
-
-    model = repository.add(
-        name=name or "snapshotter", platform=Platform.SAVEDMODEL, force=True
+    return streaming_utils.add_streaming_model(
+        repository,
+        snapshot_layer,
+        name=name or "snapshotter",
+        input_name="stream",
+        input_shape=(sum(channels.values()), stream_size),
+        streams_per_gpu=streams_per_gpu,
     )
-
-    # make the snapshotter model stateful by
-    # setting up sequence batching with a control
-    # flag for indicating the start of a new sequence
-    start = model_config.ModelSequenceBatching.Control.CONTROL_SEQUENCE_START
-    model.config.sequence_batching.MergeFrom(
-        model_config.ModelSequenceBatching(
-            max_sequence_idle_microseconds=10000000,
-            direct=model_config.ModelSequenceBatching.StrategyDirect(),
-            control_input=[
-                model_config.ModelSequenceBatching.ControlInput(
-                    name="sequence_start",
-                    control=[
-                        model_config.ModelSequenceBatching.Control(
-                            kind=start,
-                            fp32_false_true=[0, 1],
-                        )
-                    ],
-                )
-            ],
-        )
-    )
-
-    # add a model warm up since the first couple
-    # inference executions in TensorFlow can be slower
-    model.config.model_warmup.append(
-        model_config.ModelWarmup(
-            inputs={
-                "stream": model_config.ModelWarmup.Input(
-                    dims=[1, sum(channels.values()), stream_size],
-                    data_type=model_config.TYPE_FP32,
-                    zero_data=True,
-                )
-            },
-            name="zeros_warmup",
-        )
-    )
-
-    # set the number of streams desired per GPU
-    model.config.add_instance_group(count=streams_per_gpu)
-    model.export_version(snapshotter)
-
-    del model.config.input[1]
-    model.config.write()
-
-    return model

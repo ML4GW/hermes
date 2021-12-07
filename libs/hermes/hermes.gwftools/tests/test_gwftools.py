@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 from math import ceil, floor
 
@@ -6,7 +7,6 @@ import numpy as np
 import pytest
 
 from hermes.gwftools import gwftools as gwf
-from hermes.quiver.io import GCSFileSystem
 from hermes.stillwater import PipelineProcess
 
 
@@ -34,6 +34,8 @@ def fformat():
 
 @pytest.fixture(scope="session", params=[None, "frames"])
 def bucket_name(request, tstamp, fformat):
+    from hermes.quiver.io import GCSFileSystem
+
     bucket_name = "gwftools-test-bucket"
     if request.param is not None:
         bucket_name += "/" + request.param
@@ -44,6 +46,14 @@ def bucket_name(request, tstamp, fformat):
 
     yield bucket_name
     fs.delete()
+
+
+@pytest.fixture(scope="function")
+def temp_dir():
+    dirname = "tmp"
+    os.makedirs(dirname)
+    yield dirname
+    shutil.rmtree(dirname)
 
 
 @pytest.mark.gcs
@@ -113,7 +123,7 @@ def test_gcs_downloader(write_dir, t0, length, bucket_name, tstamp, fformat):
         ),
     ],
 )
-def test_frame_crawler(timeout, tstamp, fformat):
+def test_frame_crawler(timeout, temp_dir, tstamp, fformat):
     # start by building a dummy process which writes
     # "frame" files in chronological order
     class FrameWriter(PipelineProcess):
@@ -121,14 +131,12 @@ def test_frame_crawler(timeout, tstamp, fformat):
             self.i = 0
             self.tstamp = tstamp
             self.fformat = fformat
-            if not os.path.exists("tmp"):
-                os.makedirs("tmp")
             super().__init__(*args, **kwargs)
 
         def get_package(self):
             fname = self.fformat.format(self.tstamp + self.i)
             self.i += 1
-            return os.path.join("tmp", fname)
+            return os.path.join(temp_dir, fname)
 
         def process(self, fname):
             with open(fname, "w") as f:
@@ -140,62 +148,43 @@ def test_frame_crawler(timeout, tstamp, fformat):
             super().process(fname)
 
     writer = FrameWriter(name="writer", rate=10)
-    crawler = gwf.FrameCrawler("tmp", N=10, timeout=timeout, name="crawler")
+    crawler = gwf.FrameCrawler(temp_dir, N=10, timeout=timeout, name="crawler")
 
-    try:
-        # start the writer first so that the crawler
-        # has files to find to learn its pattern
-        with writer:
-            # sleep to make sure at least one frame
-            # gets written first
-            time.sleep(0.15)
-            with crawler:
-                # now iterate through their respective
-                # outputs and make sure that they match
-                # keep track of how many we've done to
-                # verify that the StopIteration gets
-                # raised in the right place
-                i = 0
-                for f1, f2 in zip(writer, crawler):
-                    assert f1 == f2
+    # start the writer first so that the crawler
+    # has files to find to learn its pattern
+    with writer:
+        # sleep to make sure at least one frame
+        # gets written first
+        time.sleep(0.15)
+        with crawler:
+            # now iterate through their respective
+            # outputs and make sure that they match
+            # keep track of how many we've done to
+            # verify that the StopIteration gets
+            # raised in the right place
+            i = 0
+            for f1, f2 in zip(writer, crawler):
+                assert f1 == f2
 
-                    # delete files once we're done with them
-                    os.remove(f1)
-                    i += 1
-                assert i == 10
-    finally:
-        # delete the temporary local write dir
-        # no matter what happens. Make sure to
-        # clear all the files first
-        write_dir = "tmp"
-        if os.path.exists(write_dir):
-            for f in os.listdir(write_dir):
-                os.remove(os.path.join(write_dir, f))
-            os.rmdir(write_dir)
+                # delete files once we're done with them
+                os.remove(f1)
+                i += 1
+            assert i == 10
 
 
 @pytest.fixture
-def fnames(tstamp, fformat):
+def fnames(temp_dir, tstamp, fformat):
     from gwpy.timeseries import TimeSeries
-
-    write_dir = "tmp"
-    if not os.path.exists(write_dir):
-        os.makedirs(write_dir)
 
     x = np.zeros((4096,))
     fnames = []
     for i in range(10):
         ts = TimeSeries(x + i, t0=tstamp + i, sample_rate=4096, channel="x")
 
-        fname = os.path.join(write_dir, fformat.format(tstamp + i))
+        fname = os.path.join(temp_dir, fformat.format(tstamp + i))
         ts.write(fname)
         fnames.append(fname)
-
     yield fnames
-    if os.path.exists(write_dir):
-        for f in os.listdir(write_dir):
-            os.remove(os.path.join(write_dir, f))
-        os.rmdir(write_dir)
 
 
 @pytest.mark.gwf

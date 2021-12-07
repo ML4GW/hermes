@@ -277,7 +277,7 @@ class EnsembleModel(Model):
         stream_size: int,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
-    ) -> Model:
+    ) -> ExposedTensor:
         if not isinstance(inputs, Sequence):
             inputs = [inputs]
 
@@ -326,6 +326,44 @@ class EnsembleModel(Model):
         # TODO: better to return the "stream" input
         # of this model to be more consistent with `add_input`?
         return streaming_input
+
+    def add_streaming_output(
+        self,
+        output: ExposedTensor,
+        update_size: int,
+        num_updates: int,
+        name: Optional[str] = None,
+        streams_per_gpu: int = 1,
+    ) -> ExposedTensor:
+        if output.model not in self.models:
+            self.config.add_step(output.model)
+
+        # Do the import for the streaming code here
+        # so that TensorFlow doesn't become a mandatory
+        # dependency of the library
+        try:
+            from hermes.quiver.streaming import make_streaming_output_model
+        except ImportError as e:
+            if "tensorflow" in str(e):
+                raise RuntimeError(
+                    "Unable to leverage streaming input, "
+                    "must install TensorFlow first"
+                )
+            raise
+
+        streaming_model = make_streaming_output_model(
+            self.repository,
+            output,
+            update_size=update_size,
+            num_updates=num_updates,
+            name=name,
+            streams_per_gpu=streams_per_gpu,
+        )
+        aggregator_output = list(streaming_model.outputs.values())[0]
+        streaming_output = self.add_output(aggregator_output)
+
+        self.pipe(output, streaming_model.inputs["update"])
+        return streaming_output
 
     def pipe(
         self,

@@ -2,7 +2,6 @@ import os
 import shutil
 
 import pytest
-from google.api_core.exceptions import NotFound
 
 from hermes.quiver.io import GCSFileSystem, LocalFileSystem
 
@@ -28,10 +27,13 @@ def run_file_manipulations(fs):
     assert fs.isdir(fs.join("test", "123"))
     assert not fs.isdir(fs.join("test", "123", "test.txt"))
 
-    # check both that the files were created
-    # and that they are properly listed,
-    # directories then files in alphanumeric order
-    assert fs.list("test") == ["123", "456", "test.csv", "test.txt"]
+    # check that the files were created
+    # do not enforce any ordering expecations
+    # since os.listdir doesn't enforce any
+    results = fs.list("test")
+    for f in ["123", "456", "test.csv", "test.txt"]:
+        results.remove(f)
+    assert len(results) == 0
 
     # check our glob functionality by making
     # sure that the csv isn't picked up
@@ -80,7 +82,10 @@ def test_local_filesytem():
         raise
 
 
+@pytest.mark.gcs
 def test_gcs_filesystem():
+    from google.api_core.exceptions import NotFound
+
     bucket_name = "hermes-quiver-test"
 
     # create the bucket file system and

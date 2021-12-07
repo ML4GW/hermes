@@ -12,6 +12,7 @@ python = "^3.8"
 tritonclient = {extras = ["all"], version = "^2.5.0", source = "ngc"}
 numpy = "^1.21"
 tblib = "^1.7"
+requests = "^2.26.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"

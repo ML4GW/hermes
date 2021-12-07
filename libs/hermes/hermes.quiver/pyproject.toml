@@ -11,6 +11,7 @@ packages = [
 python = "^3.8"
 tritonclient = {extras = ["all"], version = "^2.5.0", source = "ngc" }
 protobuf = "^3.17"
+requests = "^2.26.0"
 
 # optional dependencies
 tensorflow = {version = "^2.3", optional = true }
@@ -18,9 +19,14 @@ torch = {version = "^1.7", optional = true }
 google-cloud-storage = {version = "^1.38", optional = true }
 nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
 
+# for some reason this is missing in the `requests`
+# install in the torch environment, so add it as
+# an optional dependency just for that extra
+urllib3 = { version = "^1.26", optional = true }
+
 [tool.poetry.extras]
 tensorflow = ["tensorflow"]
-torch = ["torch"]
+torch = ["torch", "urllib3"]
 gcs = ["google-cloud-storage"]
 tensorrt = ["nvidia-tensorrt"]
 
@@ -35,3 +41,14 @@ sphinx-material = "^0.0.34"
 # NVIDIA pypi repo for tritonclient install
 name = "ngc"
 url = "https://pypi.ngc.nvidia.com"
+
+[build-system]
+requires = ["poetry>=1.2.0a2"]
+build-backend = "poetry.masonry.api"
+
+[tool.pytest.ini_options]
+markers = [
+    "tensorflow: tests that utilize TensorFlow backend",
+    "torch: tests that utilize Torch backend",
+    "gcs: tests that utilize Google Cloud Storage file system"
+]

@@ -10,9 +10,11 @@ try:
 
     _has_trt = True
 except ImportError as e:
-    if "tensorrt" not in str(e):
+    _cuda_error = "cannot open shared object file"
+    if "tensorrt" not in str(e) and _cuda_error not in str(e):
         raise
     _has_trt = False
+    _error_msg = str(e)
 
 from hermes.quiver.exporters.torch_onnx import TorchOnnx, TorchOnnxMeta
 from hermes.quiver.platform import Platform, conventions
@@ -50,7 +52,8 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
         if endpoint is None and not _has_trt:
             raise ImportError(
                 "Must have  tensorrt installed to use TorchTensorRT "
-                "export platform if no conversion endpoint is specified."
+                "export platform if no conversion endpoint is specified. "
+                "Encountered import error: '{}'".format(_error_msg)
             )
 
         def do_conversion(model_binary, config):

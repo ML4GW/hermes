@@ -185,6 +185,16 @@ class FrameCrawler(PipelineProcess):
             The amount of time to wait without finding a new
             frame before a `RuntimeError` is raised. If left
             as `None`, the process will wait indefinitely
+        N:
+            The total number of frame files to load
+        start_first:
+            Whether to start from the earliest timestamped
+            file in the data direcctory, or the latest. The
+            former might be desirable in cases where you have
+            a static directory of frames to process, while the
+            latter might be more desirable for a live data
+            stream where you want to enter into the current
+            "moment" of the stream
     """
 
     def __init__(
@@ -192,6 +202,7 @@ class FrameCrawler(PipelineProcess):
         data_dir: str,
         timeout: Optional[float] = None,
         N: Optional[int] = None,
+        start_first: bool = False,
         *args,
         **kwargs,
     ) -> None:
@@ -200,55 +211,64 @@ class FrameCrawler(PipelineProcess):
         self.data_dir = data_dir
         self.timeout = timeout
         self.N = N
+        self.start_first = start_first
 
     def run(self):
         # override the parent run briefly to figure
         # out how to iterate through the designated
         # data directory
         try:
-            # iterate through all the filenames in the
-            # directory and parse out the timestamps
-            # for all frame files
-            self.timestamp, self.pattern = None, None
-            for fname in os.listdir(self.data_dir):
-                # ignore any non frame files, though these
-                # really shouldn't be in here either
-                if not fname.endswith(".gwf"):
-                    continue
-
-                # parse the timestamp out of the file
-                # and use it to build a pattern that
-                # we can fill in with future timestamps
-                # save the length as an attribute for
-                # iteration later
-                tstamp, self.length = _parse_frame_name(fname)
-                subbed = fname.replace(str(tstamp), "{}")
-
-                # make sure that all frame files adhere
-                # to the same pattern, otherwise our job
-                # becomes really difficult
-                if self.pattern is None:
-                    self.pattern = subbed
-                else:
-                    if self.pattern != subbed:
-                        raise ValueError(
-                            "Found inconsistent file patterns "
-                            "in data dir {}: {} and {}".format(
-                                self.data_dir, self.pattern, subbed
-                            )
-                        )
-
-                # find the latest timestamp to begin with
-                if self.timestamp is None or tstamp > self.timestamp:
-                    self.timestamp = tstamp
-
-            # if we never found any .gwf files, raise an error
-            if self.timestamp is None:
+            # find all the frame files in the data directory
+            fnames = [
+                i for i in os.listdir(self.data_dir) if i.endswith(".gwf")
+            ]
+            if len(fnames) == 0:
                 raise ValueError(
                     "Couldn't find any .gwf files in data directory {}".format(
                         self.data_dir
                     )
                 )
+
+            # grab the start timestamps and length
+            # of the files from their names
+            tstamps, lengths = zip(*map(_parse_frame_name, fnames))
+
+            # make sure that everything has a uniform length so
+            # we know how much to increment our timestamp by
+            # at each interval
+            # TODO: should we just parse the length from the filename
+            # at each iteration and use that to increment?
+            unique_lengths = set(lengths)
+            if len(unique_lengths) > 1:
+                raise ValueError(
+                    "Inconsistent frame lengths {}".format(
+                        ", ".join(map(str, unique_lengths))
+                    )
+                )
+            self.length = lengths[0]
+
+            # make sure that the file naming convention
+            # is uniform across all the frames so that
+            # we can easily map from a timestamp to a
+            # filename and just worry about incrementing
+            # the timestamp
+            patterns = [
+                f.replace(str(t), "{}") for f, t in zip(fnames, tstamps)
+            ]
+            unique_patterns = set(patterns)
+            if len(unique_patterns) > 1:
+                raise ValueError(
+                    "Inconsistent frame file name patterns {}".format(
+                        ", ".join(unique_patterns)
+                    )
+                )
+            self.pattern = patterns[0]
+
+            # now grab the timestamp we want to start with
+            # if we're starting with the earliest timestamp,
+            # then don't reverse the sort so that the earliest
+            # one appears first, and vice versa
+            self.timestamp = sorted(tstamps, reverse=~self.start_first)[0]
 
             # keep track of when the last file became available
             # for measuring timeouts if we specified one
@@ -261,16 +281,7 @@ class FrameCrawler(PipelineProcess):
         self.n = 0
         super().run()
 
-    def get_package(self):
-        if self.n == self.N:
-            raise StopIteration
-
-        fname = os.path.join(
-            self.data_dir, self.pattern.format(self.timestamp)
-        )
-
-        # wait for the current file to exist, possibly
-        # timing out if it takes too long
+    def _wait_until_exists(self, fname):
         while not os.path.exists(fname):
             if (
                 self.timeout is not None
@@ -281,6 +292,22 @@ class FrameCrawler(PipelineProcess):
                     "after {} seconds".format(fname, self.timeout)
                 )
             time.sleep(1e-6)
+
+    def _get_fname(self):
+        fname = os.path.join(
+            self.data_dir, self.pattern.format(self.timestamp)
+        )
+
+        # wait for the current file to exist, possibly
+        # timing out if it takes too long
+        self._wait_until_exists(fname)
+        return fname
+
+    def get_package(self):
+        if self.n == self.N:
+            raise StopIteration
+
+        fname = self._get_fname()
 
         # reset our timeout counter and advance the
         # timestamp by the length of the frames
@@ -381,18 +408,13 @@ class FrameLoader(PipelineProcess):
         self._data = None
         self._end_next = False
 
-    def load_frame(self) -> np.ndarray:
-        # get the name of the next file to load from
-        # an upstream process, possibly raising a
-        # StopIteration if that process is done
-        fname = super().get_package()
-
+    def load_frame_file(self, fname, channels):
         # load in the data and prepare it as a numpy array
-        data = TimeSeriesDict.read(fname, self.channels)
+        data = TimeSeriesDict.read(fname, channels)
         data.resample(self.sample_rate)
-        data = np.stack(
-            [data[channel].value for channel in self.channels]
-        ).astype("float32")
+        data = np.stack([data[channel].value for channel in channels]).astype(
+            "float32"
+        )
 
         # if we specified explicit time boundaries on the
         # data that we wanted to process, use the filename
@@ -416,6 +438,16 @@ class FrameLoader(PipelineProcess):
                 diff = tstamp + frame_length - self.t0 - self.length
                 idx = int(diff * self.sample_rate)
                 data = data[:, :-idx]
+        return data
+
+    def get_next_frame(self) -> np.ndarray:
+        # get the name of the next file to load from
+        # an upstream process, possibly raising a
+        # StopIteration if that process is done
+        fname = super().get_package()
+
+        # load in the data and prepare it as a numpy array
+        data = self.load_frame_file(fname, self.channels)
 
         # if we want to handle strain data separately,
         # ship it in a queue before we do the preprocessing
@@ -454,7 +486,7 @@ class FrameLoader(PipelineProcess):
 
             # try to load in the next frame's worth of data
             try:
-                data = self.load_frame()
+                data = self.get_next_frame()
             except StopIteration:
                 # super().get_package() raised a StopIteration,
                 # so catch it and indicate that this will be

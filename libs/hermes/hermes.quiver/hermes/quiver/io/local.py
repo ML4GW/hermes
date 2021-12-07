@@ -36,6 +36,8 @@ class LocalFileSystem(FileSystem):
     def list(self, path: Optional[str] = None) -> List[str]:
         if path is not None:
             path = self.join(self.root, path)
+        else:
+            path = self.root
         return os.listdir(path)
 
     def glob(self, path: str):
