@@ -1,6 +1,7 @@
 import argparse
 import importlib
 import os
+import re
 from typing import Callable, Mapping, Optional
 
 import toml
@@ -114,7 +115,23 @@ class TypeoTomlAction(argparse.Action):
     ) -> None:
         self.bools = bools
         assert kwargs["nargs"] == "?"
+        self.regex = re.compile(r"(?<!\\)\$\{(\w+)\}")
         super().__init__(*args, **kwargs)
+
+    def _parse_value(self, value):
+        value = str(value)
+        match = self.regex.search(value)
+        if match is not None:
+            varname = match.group(1)
+            try:
+                replace = os.environ[varname]
+            except KeyError:
+                raise ValueError(
+                    "No environment variable {}, referenced "
+                    "in typeo config value {}".format(varname, value)
+                )
+            return self.regex.sub(replace, value)
+        return value
 
     def _parse_section(self, section):
         args = ""
@@ -140,11 +157,12 @@ class TypeoTomlAction(argparse.Action):
                 continue
             elif isinstance(value, dict):
                 for k, v in value.items():
+                    v = self._parse_value(v)
                     args += f"{k}={v} "
             elif isinstance(value, list):
-                args += " ".join(map(str, value)) + " "
+                args += " ".join(map(self._parse_value, value)) + " "
             else:
-                args += str(value) + " "
+                args += self._parse_value(value) + " "
         return args
 
     def _get_sections(self, config, section, command, filename):

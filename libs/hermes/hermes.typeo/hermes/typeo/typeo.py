@@ -406,6 +406,20 @@ def _make_wrapper(
         required=False,
         default=None,
         action=actions.TypeoTomlAction,
+        help=(
+            "Path to a typeo TOML config file of the form "
+            "`path(:section)(:command)`, where `section` "
+            "and `command` are optional. `path` can either be "
+            "the path to a config file or to a directory with "
+            "a `pyproject.toml` that will be used as the config. "
+            "If left blank, a `pyproject.toml` file will be "
+            "searched for in the current working directory. "
+            "`section` specifies a subtable of the config in "
+            "which to search for arguments, and `command` specifies "
+            "a subcommand of the main function to execute, whose "
+            "arguments are assumed to fall in a subtable of the config "
+            "by that name."
+        ),
     )
 
     @wraps(f)

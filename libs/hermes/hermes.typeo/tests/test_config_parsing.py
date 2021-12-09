@@ -119,17 +119,31 @@ def dump_config(config, fname, format_wrong):
             shutil.move(os.path.join(dirname, dummy_fname), fname)
 
 
+@pytest.fixture
+def a():
+    return 3
+
+
+@pytest.fixture(params=[True, False])
+def use_env_var(request):
+    return request.param
+
+
 @pytest.fixture(params=["bar", None])
-def simple_config(request):
-    a = 3
-    config = {"a": a}
+def simple_config(request, use_env_var, a):
+    if use_env_var:
+        os.environ["a"] = str(a)
+        config = {"a": "${a}"}
+    else:
+        config = {"a": a}
+
     if request.param is not None:
         config["b"] = request.param
     return config
 
 
 @pytest.fixture
-def simple_config_no_fail(simple_config, fname):
+def simple_config_no_fail(simple_config, fname, a):
     """Version of simple_config that won't fail
 
     Need this so that we can have tests depend on
@@ -137,11 +151,11 @@ def simple_config_no_fail(simple_config, fname):
     """
 
     with dump_config({"typeo": simple_config}, fname, False):
-        yield simple_config["a"], simple_config.get("b", None)
+        yield a, simple_config.get("b", None)
 
 
 @pytest.fixture
-def simple_config_with_fail(simple_config, fname, format_wrong):
+def simple_config_with_fail(simple_config, fname, format_wrong, a):
     """Version of simple config that can fail
 
     Still want to verify that improperly formatted configs
@@ -150,24 +164,30 @@ def simple_config_with_fail(simple_config, fname, format_wrong):
     """
 
     with dump_config({"typeo": simple_config}, fname, format_wrong):
-        yield simple_config["a"], simple_config.get("b", None)
+        yield a, simple_config.get("b", None)
 
 
 @pytest.fixture
-def simple_config_with_section(simple_config, fname, format_wrong):
+def simple_config_with_section(simple_config, fname, format_wrong, a):
     """Move the `a` argument of simple config to a `script section"""
 
-    a = simple_config.pop("a")
-    simple_config["scripts"] = {"foo": {"a": a}}
+    simple_config["scripts"] = {"foo": {"a": simple_config.pop("a")}}
     with dump_config({"typeo": simple_config}, fname, format_wrong):
         yield a, simple_config.get("b", None)
 
 
 @pytest.fixture
-def simple_config_with_underscores(fname, format_wrong):
-    a, b = 3, "bar"
-    config = {"typeo": {"first_arg": a, "second_arg": b}}
-    with dump_config(config, fname, format_wrong):
+def simple_config_with_underscores(fname, format_wrong, a, use_env_var):
+    b = "bar"
+
+    config = {"first_arg": a}
+    if use_env_var:
+        os.environ["SECOND_ARG"] = b
+        config["second_arg"] = "${SECOND_ARG}"
+    else:
+        config["second_arg"] = b
+
+    with dump_config({"typeo": config}, fname, format_wrong):
         yield a, b
 
 
@@ -181,17 +201,31 @@ def bool_config(request, fname, format_wrong):
 
 
 @pytest.fixture
-def list_config(fname, format_wrong):
-    a = 3
+def list_config(fname, format_wrong, use_env_var, a):
+    config = {"a": a}
     b = ["thom", "jonny", "phil"]
-    with dump_config({"typeo": {"a": a, "b": b}}, fname, format_wrong):
+    if use_env_var:
+        os.environ["VOCALS"] = "thom"
+        os.environ["DRUMS"] = "phil"
+        config["b"] = ["${VOCALS}", "jonny", "${DRUMS}"]
+    else:
+        config["b"] = b
+
+    with dump_config({"typeo": config}, fname, format_wrong):
         yield a, b
 
 
 @pytest.fixture
-def dict_config(fname, format_wrong):
-    a = 3
+def dict_config(fname, format_wrong, use_env_var, a):
     b = {"thom": 1, "jonny": 10, "phil": 99}
+    config = {"a": a}
+    if use_env_var:
+        os.environ["THOM"] = "1"
+        os.environ["phil"] = "99"
+        config["b"] = {"thom": "${THOM}", "jonny": 10, "phil": "${phil}"}
+    else:
+        config["b"] = b
+
     with dump_config({"typeo": {"a": a, "b": b}}, fname, format_wrong):
         yield a, b
 
