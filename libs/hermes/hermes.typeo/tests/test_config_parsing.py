@@ -10,7 +10,7 @@ from unittest.mock import Mock
 import pytest
 import toml
 
-from hermes.typeo import actions, typeo
+from hermes.typeo import actions, spoof, typeo
 
 
 @pytest.fixture(scope="module", params=[None, ".", "config.toml"])
@@ -560,3 +560,29 @@ def test_subcommands_with_section(
     SubcommandsTester().test_with_config(
         command, command_dict, fname, set_argv, "foo"
     )
+
+
+@pytest.mark.depends(on=["test_config"])
+def test_spoof(simple_config_no_fail, fname):
+    a, b = simple_config_no_fail
+
+    if fname is None:
+        result = spoof(simple_func_with_default)
+    else:
+        result = spoof(simple_func_with_default, filename=fname)
+
+    assert result["a"] == a
+    assert result["b"] == b or "foo"
+
+
+@pytest.mark.depends(on=["test_config"])
+def test_spoof_with_section(simple_config_with_section, fname):
+    a, b = simple_config_with_section
+
+    if fname is None:
+        result = spoof(simple_func_with_default, script="foo")
+    else:
+        result = spoof(simple_func_with_default, filename=fname, script="foo")
+
+    assert result["a"] == a
+    assert result["b"] == b or "foo"

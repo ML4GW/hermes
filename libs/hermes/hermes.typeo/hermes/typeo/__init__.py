@@ -1,1 +1,1 @@
-from .typeo import typeo
+from .typeo import spoof, typeo

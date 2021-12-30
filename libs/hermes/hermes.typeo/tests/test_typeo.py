@@ -4,7 +4,7 @@ from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from hermes.typeo import typeo
+from hermes.typeo import spoof, typeo
 
 
 @typeo
@@ -246,3 +246,19 @@ def test_callables():
     with pytest.raises(SystemExit):
         set_argv("--f", "bad.libary.name")
         func_of_func()
+
+
+@pytest.mark.depends(on=["test_typeo"])
+def test_spoof():
+    def simple_func(a: int, b: str):
+        return b * a
+
+    result = spoof(simple_func, "--a", "2", "--b", "cat")
+    assert result["a"] == 2
+    assert result["b"] == "cat"
+
+    with pytest.raises(SystemExit):
+        spoof(simple_func, "--a", "2")
+
+    with pytest.raises(ValueError):
+        spoof(simple_func, "--a", "2", filename="pyproject.toml")
