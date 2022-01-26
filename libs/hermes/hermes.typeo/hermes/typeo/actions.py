@@ -115,22 +115,41 @@ class TypeoTomlAction(argparse.Action):
     ) -> None:
         self.bools = bools
         assert kwargs["nargs"] == "?"
-        self.regex = re.compile(r"(?<!\\)\$\{(\w+)\}")
+        self.base_regex = re.compile(r"(?<!\\)\$\{base.(\w+)\}")
+        self.env_regex = re.compile(r"(?<!\\)\$\{(\w+)\}")
         super().__init__(*args, **kwargs)
 
     def _parse_value(self, value):
+        # check if the value is formatted in such a way
+        # as to indicate either an environment variable
+        # or typeo base-section wildcard by being formatted
+        # as ${} (with a \ escaping the $ if it's there)
         value = str(value)
-        match = self.regex.search(value)
-        if match is not None:
-            varname = match.group(1)
+        base_match = self.base_regex.search(value)
+        if base_match is not None:
+            varname = base_match.group(1)
             try:
-                replace = os.environ[varname]
+                replace = str(self.base[varname])
             except KeyError:
                 raise ValueError(
-                    "No environment variable {}, referenced "
-                    "in typeo config value {}".format(varname, value)
+                    "No variable {} indicated in typeo config value {} "
+                    "found in base section of typeo config".format(
+                        varname, value
+                    )
                 )
-            return self.regex.sub(replace, value)
+            value = self.base_regex.sub(replace, value)
+        else:
+            env_match = self.env_regex.search(value)
+            if env_match is not None:
+                varname = env_match.group(1)
+                try:
+                    replace = os.environ[varname]
+                except KeyError:
+                    raise ValueError(
+                        "No environment variable {}, referenced "
+                        "in typeo config value {}".format(varname, value)
+                    )
+                value = self.env_regex.sub(replace, value)
         return value
 
     def _parse_section(self, section):
@@ -289,6 +308,11 @@ class TypeoTomlAction(argparse.Action):
             raise argparse.ArgumentError(
                 self, f"No 'typeo' section in config file {filename}"
             )
+
+        try:
+            self.base = config.pop("base")
+        except KeyError:
+            self.base = {}
 
         scripts, commands = self._get_sections(
             config, section, command, filename

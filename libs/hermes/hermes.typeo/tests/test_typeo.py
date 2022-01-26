@@ -108,7 +108,7 @@ def test_maybe_sequence_funcs(annotation):
     set_argv("--a", *"test")
     assert maybe_func() == "test yes sequence"
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
 
         @typeo
         def bad_maybe_func(a: Union[str, annotation[int]]):

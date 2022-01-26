@@ -124,16 +124,20 @@ def a():
     return 3
 
 
-@pytest.fixture(params=[True, False])
-def use_env_var(request):
+@pytest.fixture(params=[None, "base", "env"])
+def look_in(request):
     return request.param
 
 
 @pytest.fixture(params=["bar", None])
-def simple_config(request, use_env_var, a):
-    if use_env_var:
+def simple_config(request, look_in, a):
+    config = {}
+    if look_in == "env":
         os.environ["a"] = str(a)
-        config = {"a": "${a}"}
+        config["a"] = "${a}"
+    elif look_in == "base":
+        config["base"] = {"a": a}
+        config["a"] = "${base.a}"
     else:
         config = {"a": a}
 
@@ -177,13 +181,16 @@ def simple_config_with_section(simple_config, fname, format_wrong, a):
 
 
 @pytest.fixture
-def simple_config_with_underscores(fname, format_wrong, a, use_env_var):
+def simple_config_with_underscores(fname, format_wrong, a, look_in):
     b = "bar"
 
     config = {"first_arg": a}
-    if use_env_var:
+    if look_in == "env":
         os.environ["SECOND_ARG"] = b
         config["second_arg"] = "${SECOND_ARG}"
+    elif look_in == "base":
+        config["base"] = {"b": b}
+        config["second_arg"] = "${base.b}"
     else:
         config["second_arg"] = b
 
@@ -201,13 +208,16 @@ def bool_config(request, fname, format_wrong):
 
 
 @pytest.fixture
-def list_config(fname, format_wrong, use_env_var, a):
+def list_config(fname, format_wrong, look_in, a):
     config = {"a": a}
     b = ["thom", "jonny", "phil"]
-    if use_env_var:
+    if look_in == "env":
         os.environ["VOCALS"] = "thom"
         os.environ["DRUMS"] = "phil"
         config["b"] = ["${VOCALS}", "jonny", "${DRUMS}"]
+    elif look_in == "base":
+        config["base"] = {"vocals": "thom", "drums": "phil"}
+        config["b"] = ["${base.vocals}", "jonny", "${base.drums}"]
     else:
         config["b"] = b
 
@@ -216,13 +226,20 @@ def list_config(fname, format_wrong, use_env_var, a):
 
 
 @pytest.fixture
-def dict_config(fname, format_wrong, use_env_var, a):
+def dict_config(fname, format_wrong, look_in, a):
     b = {"thom": 1, "jonny": 10, "phil": 99}
     config = {"a": a}
-    if use_env_var:
+    if look_in == "env":
         os.environ["THOM"] = "1"
         os.environ["phil"] = "99"
         config["b"] = {"thom": "${THOM}", "jonny": 10, "phil": "${phil}"}
+    elif look_in == "base":
+        config["base"] = {"THOM": "1", "phil": "99"}
+        config["b"] = {
+            "thom": "${base.THOM}",
+            "jonny": 10,
+            "phil": "${base.phil}",
+        }
     else:
         config["b"] = b
 
@@ -586,3 +603,100 @@ def test_spoof_with_section(simple_config_with_section, fname):
 
     assert result["a"] == a
     assert result["b"] == b or "foo"
+
+
+@pytest.fixture
+def subcommands_with_returns_config(command):
+    return {
+        "typeo": {
+            "a": int(command[-1]),
+            "commands": {
+                "command1": OrderedDict([("name", "thom")]),
+                "command2": OrderedDict(
+                    [
+                        ("first_name", "jonny"),
+                        ("last_name", "greenwood"),
+                    ]
+                ),
+            },
+        }
+    }
+
+
+@pytest.fixture
+def subcommands_with_returns_config_no_sections(
+    subcommands_with_returns_config, command, fname, format_wrong
+):
+    subcommands_config = subcommands_with_returns_config
+    with dump_config(subcommands_config, fname, format_wrong):
+        d = subcommands_config["typeo"]["commands"][command]
+        yield command, d
+
+
+@pytest.fixture
+def subcommands_with_returns_with_sections_config(
+    subcommands_with_returns_config, command, fname, format_wrong
+):
+    subcommands_config = subcommands_with_returns_config
+    commands = subcommands_config["typeo"].pop("commands")
+    subcommands_config["typeo"]["scripts"] = {"foo": {"commands": commands}}
+    with dump_config(subcommands_config, fname, format_wrong):
+        d = subcommands_config["typeo"]["scripts"]["foo"]["commands"][command]
+        yield command, d
+
+
+class SubcommandsWithReturnsTester:
+    mock = Mock()
+
+    def base_func(self, a: int):
+        return {"age": a}
+
+    def command1(self, name: str, age: int = 0):
+        self.mock.name = name
+        return age * 2
+
+    def command2(self, first_name: str, last_name: str, age: int = 0):
+        self.mock.name = first_name + " " + last_name
+        return age * 4
+
+    def test_with_config(
+        self, command, command_dict, fname, set_argv, section=None
+    ):
+        a = int(command[-1])
+        expected = ["--a", str(a), command]
+        for k, v in command_dict.items():
+            k = k.replace("_", "-")
+            expected.append(f"--{k}")
+            expected.append(str(v))
+        _test_action(expected, fname, cmd=command, section=section)
+
+        section = section or ""
+        set_argv(f":{section}:{command}")
+
+        result = typeo(
+            self.base_func, command1=self.command1, command2=self.command2
+        )()
+
+        name = " ".join([v for k, v in command_dict.items() if "name" in k])
+        assert self.mock.name == name
+        assert result == a * 2 * int(command[-1])
+
+
+@pytest.mark.depends(on=["test_config"])
+def test_subcommands_with_returns(
+    subcommands_with_returns_config_no_sections, fname, set_argv
+):
+    command, command_dict = subcommands_with_returns_config_no_sections
+    SubcommandsWithReturnsTester().test_with_config(
+        command, command_dict, fname, set_argv
+    )
+
+
+@pytest.mark.depends(on=["test_config"])
+def test_subcommands_with_returns_with_section(
+    subcommands_with_returns_with_sections_config, fname, set_argv
+):
+    command, command_dict = subcommands_with_returns_with_sections_config
+    SubcommandsWithReturnsTester().test_with_config(
+        command, command_dict, fname, set_argv, "foo"
+    )

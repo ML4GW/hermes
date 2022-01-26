@@ -4,7 +4,15 @@ import sys
 from collections import abc
 from enum import Enum
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Optional, Tuple, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import hermes.typeo.actions as actions
 
@@ -31,7 +39,13 @@ class CustomHelpFormatter(argparse.RawDescriptionHelpFormatter):
 
 def _parse_union(param: inspect.Parameter) -> Tuple[type, _MAYBE_TYPE]:
     annotation = param.annotation
-    if len(annotation.__args__) > 2:
+
+    try:
+        # type_ will be the type that we pass to the
+        # parser. second_type can either be `None` or
+        # some array of type_
+        type_, second_type = annotation.__args__
+    except TypeError:
         raise ValueError(
             "Can't parse argument {} with annotation {} "
             "that is a Union of more than 2 types.".format(
@@ -39,66 +53,56 @@ def _parse_union(param: inspect.Parameter) -> Tuple[type, _MAYBE_TYPE]:
             )
         )
 
-    # type_ will be the type that we pass to the
-    # parser. second_type can either be `None` or
-    # some array of type_
-    type_, second_type = annotation.__args__
-
     try:
         origin = second_type.__origin__
     except AttributeError:
+        # if the second argument to Union doesn't have
+        # an origin, it's not array-like and so is
+        # only allowed if its None (which basically
+        # corresponds to the `Optional` case)
         try:
             # see if the second type in the Union is NoneType
-            if isinstance(None, second_type):
-                # this is basically a typing.Optional case
-                # make sure that the default is None
-                if param.default is not None:
-                    raise ValueError(
-                        "Argument {} with Union of type {} and "
-                        "NoneType must have a default of None".format(
-                            param.name, type_
-                        )
-                    )
-                return type_, None
+            is_none = isinstance(None, second_type)
         except TypeError:
             # annotation.__args__[1] is not a type that we
             # can check `None` as an instance of, so the
             # `isinstance` check above raises a TypeError.
-            pass
+            is_none = False
 
-        # this annotation isn't NoneType and doesn't have an
-        # __origin__, so we can infer that it's not array-like
-        # and we don't know how to parse this arg
-        raise TypeError(
-            "Arg {} has Union of types {} and {}".format(
-                param.name, type_, second_type
+        if is_none:
+            # if this second argument is None, i.e. we
+            # have an Optional, the default must be None
+            # otherwise there's no way for us to ever
+            # be able to parse that `None` value from the
+            # command line
+            if param.default is not None:
+                raise ValueError(
+                    "Argument {} with Union of type {} and "
+                    "NoneType must have a default of None".format(
+                        param.name, type_
+                    )
+                )
+            # we're done parsing now so return the two types
+            return type_, None
+        else:
+            # this annotation isn't NoneType and doesn't have an
+            # __origin__, so we can infer that it's not array-like
+            # and we don't know how to parse this arg
+            raise TypeError(
+                "Arg {} has Union of types {} and {}".format(
+                    param.name, type_, second_type
+                )
             )
-        )
 
-    def _is_valid(idx=None):
-        try:
-            args = second_type.__args__
-        except AttributeError:
-            # in py3.9, generic aliases with no type
-            # specified won't have __args__ at all,
-            # so this is the same as being TypeVar
-            # in py<3.9 and we're ok
-            return True
-
-        if idx is not None:
-            args = [args[idx]]
-
-        for t in args:
-            if not (t in (type_, Ellipsis) or isinstance(t, TypeVar)):
-                return False
-        return True
-
+    # check if the type passed to the array-like
+    # second argument to Union matches with the
+    # type of the first argument to Union
     if origin in _LIST_ORIGINS:
-        assert _is_valid(0)
+        idx_to_check = 0
     elif origin in _DICT_ORIGINS:
-        assert _is_valid(1)
+        idx_to_check = 1
     elif origin is tuple:
-        assert _is_valid()
+        idx_to_check = None
     else:
         raise TypeError(
             "Arg {} has Union of type {} and type {} "
@@ -107,6 +111,26 @@ def _parse_union(param: inspect.Parameter) -> Tuple[type, _MAYBE_TYPE]:
             )
         )
 
+    try:
+        args = second_type.__args__
+    except AttributeError:
+        # in py3.9, generic aliases with no type
+        # specified won't have __args__ at all,
+        # so this is the same as being TypeVar
+        # in py<3.9 and we're ok
+        pass
+    else:
+        if idx_to_check is not None:
+            args = [args[idx_to_check]]
+
+        for arg in args:
+            if arg not in (type_, Ellipsis) and not isinstance(arg, TypeVar):
+                raise TypeError(
+                    "Type argument {} passed to annotation {} of "
+                    "parameter {} can't be parsed".format(
+                        arg, annotation, param.name
+                    )
+                )
     return second_type, type_
 
 
@@ -286,11 +310,8 @@ def _parse_doc(f: Callable):
 
 
 def make_parser(
-    f: Callable,
-    prog: Optional[str] = None,
-    parser: Optional[argparse.ArgumentParser] = None,
-    parent_parser: Optional[argparse.ArgumentParser] = None,
-) -> argparse.ArgumentParser:
+    f: Callable, parser: argparse.ArgumentParser
+) -> Dict[str, bool]:
     """Build an argument parser for a function
 
     Builds an `argparse.ArgumentParser` object by using
@@ -304,24 +325,15 @@ def make_parser(
         f:
             The function to construct a command line
             argument parser for
-        prog:
-            Passed to the `prog` argument of
-            `argparse.ArgumentParser`. If left as `None`,
-            `f.__name__` will be used
+        parser:
+            An existing parser to which to add arguments.
     Returns:
-        The argument parser for the given function
+        A mapping from the names of any boolean arguments
+            to the function to their default values, to be
+            used for typeo config parsing.
     """
 
     doc, args = _parse_doc(f)
-    if parser is None:
-        # build the parser, using a raw text formatter, so that
-        # any formatting in the argument description is respected
-        parser = argparse.ArgumentParser(
-            prog=prog or f.__name__,
-            description=doc.rstrip(),
-            formatter_class=CustomHelpFormatter,
-            parents=[parent_parser] if parent_parser is not None else None,
-        )
 
     # now iterate through the arguments of f
     # and add them as options to the parser
@@ -397,7 +409,7 @@ def make_parser(
         # argument names
         name = name.replace("_", "-")
         parser.add_argument(f"--{name}", **kwargs)
-    return parser, booleans
+    return booleans
 
 
 def _make_wrapper(
@@ -415,25 +427,35 @@ def _make_wrapper(
 
     # now build a parser for the main function `f` which
     # inherits from this parser and can parse whatever
-    # the config parser can't understand
-    parser, booleans = make_parser(f, prog, None, parent_parser)
+    # the config parser can't understand. The point of
+    # inheritance is so that the `-h` flag will trigger
+    # help from this parser and include the '--typeo' flag
+    description, _ = _parse_doc(f)
+    parser = argparse.ArgumentParser(
+        prog=prog or f.__name__,
+        description=description.rstrip(),
+        formatter_class=CustomHelpFormatter,
+        parents=[parent_parser],
+    )
+    booleans = make_parser(f, parser)
 
     # if we have subcommands, add subparsers for each
     # one of them with their own arguments
     if len(kwargs) > 0:
         subparsers = parser.add_subparsers(dest="_subcommand", required=True)
         for func_name, func in kwargs.items():
+            description, _ = _parse_doc(func)
             subparser = subparsers.add_parser(
                 func_name.replace("_", "-"),
-                description=_parse_doc(func)[0],
+                description=description,
                 formatter_class=CustomHelpFormatter,
             )
-            _, bools = make_parser(func, None, subparser, None)
+
+            bools = make_parser(func, subparser)
             booleans.update(bools)
 
-    # now add an argument for parsing a config file,
-    # using info about booleans stripped from downstream
-    # parsers
+    # now add an argument for parsing a config file, using
+    # info about booleans stripped from downstream parsers
     parent_parser.add_argument(
         "--typeo",
         bools=booleans,
@@ -467,6 +489,8 @@ def _make_wrapper(
             config_args, remainder = parent_parser.parse_known_args()
 
             if config_args.typeo is not None:
+                # TODO: what's the best way to have command line
+                # arguments override those in the typeo config?
                 if remainder:
                     raise ValueError(
                         "Found additional arguments '{}' when passing "
@@ -494,6 +518,10 @@ def _make_wrapper(
 
         # run the subcommand if one was specified
         if subcommand is not None:
+            # if the main function returned a dictionary,
+            # pass it as kwargs to the subcommand
+            if isinstance(result, dict):
+                subkw.update(result)
             result = subcommand(**subkw)
         return result
 
