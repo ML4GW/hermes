@@ -119,7 +119,16 @@ class TypeoTomlAction(argparse.Action):
         self.env_regex = re.compile(r"(?<!\\)\$\{(\w+)\}")
         super().__init__(*args, **kwargs)
 
-    def _parse_value(self, value):
+    def _get_base_value(self, arg, value):
+        try:
+            return self.base[value]
+        except KeyError:
+            raise ValueError(
+                "Argument {} reference base config "
+                "argument {} which doesn't exist".format(arg, value)
+            )
+
+    def _parse_string(self, value):
         # check if the value is formatted in such a way
         # as to indicate either an environment variable
         # or typeo base-section wildcard by being formatted
@@ -128,15 +137,8 @@ class TypeoTomlAction(argparse.Action):
         base_match = self.base_regex.search(value)
         if base_match is not None:
             varname = base_match.group(1)
-            try:
-                replace = str(self.base[varname])
-            except KeyError:
-                raise ValueError(
-                    "No variable {} indicated in typeo config value {} "
-                    "found in base section of typeo config".format(
-                        varname, value
-                    )
-                )
+            base_value = self._get_base_value(value, varname)
+            replace = self._parse_value(base_value)
             value = self.base_regex.sub(replace, value)
         else:
             env_match = self.env_regex.search(value)
@@ -152,36 +154,69 @@ class TypeoTomlAction(argparse.Action):
                 value = self.env_regex.sub(replace, value)
         return value
 
+    def _parse_value(self, value):
+        if isinstance(value, bool):
+            return ""
+        elif isinstance(value, dict):
+            args = ""
+            for k, v in value.items():
+                v = self._parse_string(v)
+                args += f"{k}={v} "
+            return args[:-1]
+        elif isinstance(value, list):
+            args = ""
+            for v in map(self._parse_string, value):
+                args += v + " "
+            return args[:-1]
+        else:
+            return self._parse_string(value)
+
+    def _check_if_bool(self, arg, value):
+        try:
+            bool_default = self.bools[arg]
+        except (KeyError, TypeError):
+            bool_default = None
+
+        if bool_default is None and isinstance(value, bool):
+            raise argparse.ArgumentError(
+                self,
+                "Can't parse non-boolean argument "
+                "'{}' with value {}".format(arg, value),
+            )
+        elif bool_default is not None:
+            if isinstance(value, str):
+                match = self.base_regex.search(value)
+                if match is not None:
+                    field = match.group(1)
+                    value = self._get_base_value(arg, field)
+
+            if bool_default == value:
+                return "", value
+            else:
+                return "--" + arg.replace("_", "-"), value
+        else:
+            return "--" + arg.replace("_", "-"), value
+
     def _parse_section(self, section):
+        if isinstance(section, str):
+            try:
+                value = self.base_regex.search(section).group(1)
+            except AttributeError:
+                raise ValueError(f"Section {section} not parseable")
+            else:
+                section = self._get_base_value(section, value)
+
+        if not isinstance(section, dict):
+            raise ValueError(f"Section {section} not parseable")
+
         args = ""
         for arg, value in section.items():
-            bool_default = None
-            if self.bools is not None:
-                try:
-                    bool_default = self.bools[arg]
-                except KeyError:
-                    pass
+            flag, value = self._check_if_bool(arg, value)
+            args += flag + " "
 
-            if bool_default is None and isinstance(value, bool):
-                raise argparse.ArgumentError(
-                    self,
-                    "Can't parse non-boolean argument "
-                    "'{}' with value {}".format(arg, value),
-                )
-            elif bool_default is not None and bool_default == value:
-                continue
-
-            args += "--" + arg.replace("_", "-") + " "
-            if isinstance(value, bool):
-                continue
-            elif isinstance(value, dict):
-                for k, v in value.items():
-                    v = self._parse_value(v)
-                    args += f"{k}={v} "
-            elif isinstance(value, list):
-                args += " ".join(map(self._parse_value, value)) + " "
-            else:
-                args += self._parse_value(value) + " "
+            value = self._parse_value(value)
+            if value:
+                args += value + " "
         return args
 
     def _get_sections(self, config, section, command, filename):

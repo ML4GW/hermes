@@ -18,26 +18,28 @@ class Aggregator(tf.keras.layers.Layer):
         super().__init__(*args, **kwargs)
         self.update_size = update_size
         self.num_updates = num_updates
+        self.snapshot_size = update_size * num_updates
 
     def build(self, input_shape) -> None:
-        snapshot_size = self.update_size * self.num_updates
-
         if input_shape[0] is None:
             raise ValueError("Must specify batch dimension")
         if input_shape[0] != 1:
             # TODO: support batching
             raise ValueError("Batching not currently supported")
-        if input_shape[-1] != snapshot_size:
+        if input_shape[-1] < self.snapshot_size:
             raise ValueError(
-                "Expected input update of {} samples, but "
-                "found {}".format(snapshot_size, input_shape[-1])
+                "Expected input update of at least {} samples, but "
+                "found {}".format(self.snapshot_size, input_shape[-1])
             )
 
         self.update_idx = self.add_weight(
             name="update_idx", shape=[], dtype=tf.float32, initializer="zeros"
         )
 
-        snapshot_shape = [input_shape[0], snapshot_size - self.update_size]
+        snapshot_shape = [
+            input_shape[0],
+            self.snapshot_size - self.update_size,
+        ]
         if len(input_shape) == 3:
             snapshot_shape.insert(1, input_shape[1])
         elif len(input_shape) > 3:
@@ -67,6 +69,11 @@ class Aggregator(tf.keras.layers.Layer):
     def call(self, x, sequence_start):
         snapshot = (1.0 - sequence_start) * self.snapshot
         update_idx = (1.0 - sequence_start) * self.update_idx + 1
+
+        if len(x.shape) == 3:
+            x = x[:, :, -self.snapshot_size :]
+        else:
+            x = x[:, -self.snapshot_size]
 
         snapshot = tf.concat([snapshot, self.update], axis=-1)
         weights = tf.clip_by_value(self.normalizer, 0, update_idx)

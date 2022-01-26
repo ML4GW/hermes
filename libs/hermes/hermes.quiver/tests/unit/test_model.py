@@ -135,26 +135,6 @@ def test_ensemble_streaming_output(
     )
 
     ensemble = Model("ensemble", temp_local_repo, platform=Platform.ENSEMBLE)
-    with pytest.raises(ValueError):
-        ensemble.add_streaming_output(
-            model.outputs["y"], update_size, num_updates
-        )
-
-    import torch
-
-    class Slicer(torch.nn.Module):
-        def forward(self, x):
-            if channel_dim is None:
-                return x[:, -num_updates * update_size :]
-            else:
-                return x[:, :, -num_updates * update_size :]
-
-    slicer = temp_local_repo.add("slicer", platform=Platform.ONNX, force=True)
-    slicer.export_version(
-        Slicer(), input_shapes={"x": shape}, output_names=["update"]
-    )
-    ensemble.pipe(model.outputs["y"], slicer.inputs["x"])
-
     if (num_updates * update_size) > torch_model.size:
         with pytest.raises(ValueError):
             ensemble.add_streaming_output(
@@ -162,9 +142,6 @@ def test_ensemble_streaming_output(
             )
         return
 
-    ensemble.add_streaming_output(
-        slicer.outputs["update"], update_size, num_updates
-    )
-
+    ensemble.add_streaming_output(model.outputs["y"], update_size, num_updates)
     assert ensemble.config.output[0].name.startswith("aggregator")
     assert ensemble.config.output[0].dims == output_shape

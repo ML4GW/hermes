@@ -215,7 +215,7 @@ class ModelConfig:
     def scale_instance_group(
         self, count: int, name: Union[str, int, None] = None
     ) -> model_config.ModelInstanceGroup:
-        if len(self.instance_groups) == 0:
+        if len(self.instance_group) == 0:
             raise ValueError(
                 "Config for model {} has no instance groups "
                 "to scale".format(self.name)
@@ -224,7 +224,7 @@ class ModelConfig:
         if name is None or isinstance(name, int):
             name = name or 0
             try:
-                group = self.instance_groups[name]
+                group = self.instance_group[name]
             except IndexError:
                 raise IndexError(
                     "Config for model {} with {} instance groups "
