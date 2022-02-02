@@ -73,7 +73,7 @@ class Aggregator(tf.keras.layers.Layer):
         if len(x.shape) == 3:
             x = x[:, :, -self.snapshot_size :]
         else:
-            x = x[:, -self.snapshot_size]
+            x = x[:, -self.snapshot_size :]
 
         snapshot = tf.concat([snapshot, self.update], axis=-1)
         weights = tf.clip_by_value(self.normalizer, 0, update_idx)
