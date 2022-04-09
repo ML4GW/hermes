@@ -23,7 +23,7 @@ if TYPE_CHECKING:
         from typing import _GenericAlias as GenericAlias
 
 
-_LIST_ORIGINS = (list, abc.Sequence)
+_LIST_ORIGINS = (list, abc.Sequence, abc.Iterable)
 _ARRAY_ORIGINS = _LIST_ORIGINS + (tuple,)
 _DICT_ORIGINS = (dict, abc.Mapping)
 _ANNOTATION = Union[type, "GenericAlias"]

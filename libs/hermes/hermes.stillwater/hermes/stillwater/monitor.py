@@ -32,7 +32,7 @@ def _get_re(prefix: str, model: str, version: int):
                 prefix,
                 f'(?P<gpu_id>{_uuid_pattern})",',
                 f'model="{model}",',
-                fr'version="{version}"\}} ',
+                rf'version="{version}"\}} ',
                 "(?P<value>[0-9.]+)",
             ]
         )

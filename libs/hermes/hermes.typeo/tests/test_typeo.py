@@ -1,6 +1,6 @@
 import sys
 from enum import Enum
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple, Union
 
 import pytest
 
@@ -93,7 +93,7 @@ def test_typeo():
 
 
 @pytest.mark.depends(on=["test_typeo"])
-@pytest.mark.parametrize("annotation", [List, Tuple, Sequence])
+@pytest.mark.parametrize("annotation", [List, Iterable, Tuple, Sequence])
 def test_maybe_sequence_funcs(annotation):
     @typeo
     def maybe_func(a: Union[str, annotation[str]]):
