@@ -64,9 +64,10 @@ class InferenceClient(PipelineProcess):
         rate: Optional[float] = None,
         join_timeout: float = 10,
         name: Optional[str] = None,
+        verbose: bool = False,
     ) -> None:
         try:
-            client = triton.InferenceServerClient(url)
+            client = triton.InferenceServerClient(url, verbose=verbose)
 
             if not client.is_server_live():
                 raise RuntimeError(f"Server at url {url} isn't live")
@@ -436,6 +437,7 @@ class InferenceClient(PipelineProcess):
                 # the pickler. TODO: can we fix this in the
                 # ExceptionWrapper class?
                 # if isinstance(error, triton.InferenceServerException):
+                self.logger.error(f"Server returned error:\n{error}")
                 error = RuntimeError(str(error))
                 raise error
 
@@ -446,6 +448,11 @@ class InferenceClient(PipelineProcess):
             # the message, as well as the sequence id if there
             # is a sequence associated with the request
             request_id, sequence_id, t0 = self.clock_stop(request_id)
+            self.logger.debug(
+                "Received response for request {} from sequence {}".format(
+                    request_id, sequence_id
+                )
+            )
 
             # parse the numpy arrays from the response and
             # package them into a dictionary mapping from
@@ -472,6 +479,7 @@ class InferenceClient(PipelineProcess):
             # the logger gets initialized before doing cleanup
             while self.logger is None:
                 time.sleep(1e-6)
+            self.logger.error(f"Encountered error in callback:\n{e}")
 
             # run cleanup, which should stop the process
             self.cleanup(e)
@@ -486,6 +494,7 @@ class InferenceClient(PipelineProcess):
         """Make a request to the server using the passed parameters"""
 
         request_id = self.clock_start(request_id, sequence_id)
+        self.logger.debug(f"Submitting inference request {request_id}")
         if len(self.states) > 0:
             self.client.async_stream_infer(
                 self.model_name,
