@@ -8,6 +8,8 @@ from typing import (
     TYPE_CHECKING,
     Callable,
     Dict,
+    List,
+    Literal,
     Optional,
     Tuple,
     TypeVar,
@@ -154,10 +156,90 @@ def _get_origin_and_type(
         return None, annotation
 
 
+def _parse_literal(annotation: _ANNOTATION):
+    args = annotation.__args__
+    type_ = type(args[0])
+    if len(args) > 1:
+        assert all([isinstance(i, type_) for i in args[1:]])
+
+    if isinstance(args[0], Callable):
+        type_ = abc.Callable
+        args = [f"{i.__module__}.{i.__name__}" for i in args]
+    return type_, args
+
+
+def _is_untyped(args):
+    # args being None indicates untyped lists and tuples in py3.9,
+    # and args[0] being TypeVar indicates untyped lists in py3.8
+    return args is None or isinstance(args[0], TypeVar)
+
+
 def _parse_array_like(
+    annotation: _ANNOTATION, origin: _MAYBE_TYPE, type_: type
+) -> Tuple[type, Optional[Callable], Optional[List]]:
+    """Grab types and expected actions for array-like annotations"""
+
+    try:
+        args = annotation.__args__
+    except AttributeError:
+        args = None
+
+    if origin in _DICT_ORIGINS:
+        action = actions.MappingAction
+        if not _is_untyped(args):
+            # make sure that the expected type
+            # for the dictionary key is string
+            # TODO: add kwarg for parsing non-str
+            # dictionary keys
+            assert args[0] is str
+
+            # the type used to parse the values for
+            # the dictionary will be the type passed
+            # the parser action
+            type_ = args[1]
+    else:
+        action = None
+        try:
+            if not _is_untyped(args):
+                type_ = args[0]
+        except IndexError:
+            # untyped Tuples in py3.8 will have an empty __args__
+            pass
+        else:
+            # for tuples make sure that everything
+            # has the same type
+            if origin is tuple and not _is_untyped(args):
+                # TODO: use a custom action to verify the
+                # number of arguments and map to a tuple
+                try:
+                    for arg in annotation.__args__[1:]:
+                        if arg is not Ellipsis:
+                            assert arg == type_
+                except IndexError:
+                    # if the Tuple only has one arg, we don't need
+                    # to worry about checking everything else
+                    pass
+
+    # check to see if this array-like container
+    # contains literals, in which case parse out
+    # the type and choices expected by the literal
+    try:
+        is_literal = type_.__origin__ is Literal
+    except (TypeError, AttributeError):
+        choices = None
+    else:
+        if is_literal:
+            type_, choices = _parse_literal(type_)
+        else:
+            choices = None
+
+    return type_, action, choices
+
+
+def _parse_container(
     annotation: _ANNOTATION, origin: _MAYBE_TYPE, kwargs: dict, type_: type
 ) -> _MAYBE_TYPE:
-    """Make sure array-like typed arguments pass the right type to the parser
+    """Make sure container-like arguments pass the right type to the parser
 
     For an annotation with an origin, do some checks on the
     origin to make sure that the type and action argparse
@@ -177,54 +259,19 @@ def _parse_array_like(
 
     if origin in _ARRAY_ORIGINS + _DICT_ORIGINS:
         kwargs["nargs"] = "+"
-        try:
-            args = annotation.__args__
-        except AttributeError:
-            args = None
+        type_, action, choices = _parse_array_like(annotation, origin, type_)
 
-        if origin in _DICT_ORIGINS:
-            kwargs["action"] = actions.MappingAction
-            if args is None or isinstance(args[0], TypeVar):
-                return type_
-
-            # make sure that the expected type
-            # for the dictionary key is string
-            # TODO: add kwarg for parsing non-str
-            # dictionary keys
-            assert args[0] is str
-
-            # the type used to parse the values for
-            # the dictionary will be the type passed
-            # the parser action
-            type_ = args[1]
-        else:
-            try:
-                if args is None or isinstance(args[0], TypeVar):
-                    # args being None indicates untyped lists
-                    # and tuples in py3.9, and args[0] being
-                    # TypeVar indicates untyped lists in py3.8
-                    return type_
-                type_ = args[0]
-            except IndexError:
-                # untyped Tuples in py3.8 will have an empty __args__
-                return type_
-
-            # for tuples make sure that everything
-            # has the same type
-            if origin is tuple:
-                # TODO: use a custom action to verify the
-                # number of arguments and map to a tuple
-                try:
-                    for arg in annotation.__args__[1:]:
-                        if arg is not Ellipsis:
-                            assert arg == type_
-                except IndexError:
-                    # if the Tuple only has one arg, we don't need
-                    # to worry about checking everything else
-                    pass
+        if actions is not None:
+            kwargs["action"] = action
+        if choices is not None:
+            kwargs["choices"] = choices
         return type_
     elif origin is abc.Callable:
         return origin
+    elif origin is Literal:
+        type_, choices = _parse_literal(annotation)
+        kwargs["choices"] = choices
+        return type_
     elif origin is not None:
         # this is a type with some unknown origin
         raise TypeError(f"Can't help with arg of type {origin}")
@@ -362,7 +409,7 @@ def make_parser(
         # and return the appropriate type. This returns `None`
         # if there's no origin to process, in which case we just
         # keep using `type_`
-        type_ = _parse_array_like(annotation, origin, kwargs, type_)
+        type_ = _parse_container(annotation, origin, kwargs, type_)
 
         # our last origin check to see if type_ is typing.Callable,
         # in which case the origin will be abc.Callable whic
