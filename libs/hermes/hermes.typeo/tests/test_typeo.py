@@ -1,6 +1,15 @@
 import sys
 from enum import Enum
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Callable,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import pytest
 
@@ -170,8 +179,67 @@ def test_enums():
     assert f() == [Member.SINGER, Member.SINGER, Member.GUITAR]
 
 
+@pytest.fixture(params=[None, List, Iterable, Tuple, Sequence])
+def container(request):
+    return request.param
+
+
+@pytest.fixture(params=[int, float, str, Callable])
+def type_(request):
+    return request.param
+
+
 @pytest.mark.depends(on=["test_typeo"])
-@pytest.mark.parametrize("generic", [List, Tuple, Sequence])
+def test_literal(container, type_):
+    if type_ == int:
+        values = [10, 20]
+        args = list(map(str, values))
+        annotation = Literal[10, 20]
+    elif type_ == float:
+        values = [2.1, 3.2]
+        args = list(map(str, values))
+        annotation = Literal[2.1, 3.2]
+    elif type_ == str:
+        args = values = ["Thom", "Jonny"]
+        annotation = Literal["Thom", "Jonny"]
+    else:
+        import math
+
+        values = [math.sqrt, math.pow]
+        args = ["math." + i.__name__ for i in values]
+        annotation = Literal[math.sqrt, math.pow]
+
+    if container is not None:
+        annotation = container[annotation]
+
+    @typeo
+    def f(member: annotation):
+        return member
+
+    set_argv("--member", args[0])
+    value = f()
+    if container is not None:
+        value = value[0]
+    assert value == values[0]
+
+    set_argv("--member", "Phil")
+    with pytest.raises(SystemExit):
+        f()
+
+    if container is None:
+        return
+
+    set_argv("--member", args[0], args[1], args[0])
+    value = f()
+    assert value == [values[0], values[1], values[0]]
+
+    set_argv("--member", args[1], "Phil")
+    with pytest.raises(SystemExit):
+        f()
+
+
+@pytest.mark.depends(on=["test_typeo"])
+@pytest.mark.parametrize("generic", [Iterable, List, Tuple, Sequence])
 def test_blank_generics(generic):
     """Untyped generics should default to parsing as strings"""
 
@@ -189,7 +257,7 @@ def test_blank_generics(generic):
 
 
 @pytest.mark.depends(on=["test_maybe_sequence_funcs", "test_blank_generics"])
-@pytest.mark.parametrize("generic", [List, Tuple, Sequence])
+@pytest.mark.parametrize("generic", [Iterable, List, Tuple, Sequence])
 def test_unions_with_blank_generics(generic):
     """Test generics used as the second argument to a Union
 
