@@ -9,7 +9,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-tritonclient = {extras = ["all"], version = "^2.18.0"}
+tritonclient = {extras = ["all"], version = "^2.18"}
 protobuf = "^3.17"
 requests = "^2.26.0"
 
