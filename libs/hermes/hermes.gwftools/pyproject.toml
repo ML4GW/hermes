@@ -22,11 +22,6 @@ extras = ["gcs"]
 [tool.poetry.extras]
 gcs = ["hermes.quiver"]
 
-[[tool.poetry.source]]
-# NVIDIA pypi repo for tritonclient install
-name = "ngc"
-url = "https://pypi.ngc.nvidia.com"
-
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
 
