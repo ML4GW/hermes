@@ -1244,7 +1244,7 @@ torch = ["torch", "urllib3"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "a69f5166bf521316e3e9f264cba3332ebc168f0ad2e359f4579a55b2475774d3"
+content-hash = "024a63b052177b92c775dac8b4cd8f5e6bf89107ac11ce1190a6e2d67ff6c1c2"
 
 [metadata.files]
 absl-py = [
