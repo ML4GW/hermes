@@ -262,7 +262,7 @@ class EnsembleModel(Model):
         # create an output using either the specified key if
         # provided, otherwise using the name of the output tensor
         key = key or output.name
-        if key not in self.inputs:
+        if key not in self.outputs:
             # TODO: dynamic dtype mapping
             self.config.add_output(key, output.shape, dtype="float32")
         else:
