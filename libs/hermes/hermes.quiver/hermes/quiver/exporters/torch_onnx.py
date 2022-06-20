@@ -117,7 +117,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             shapes = {name: shape for name, shape in zip(output_names, shapes)}
         return shapes
 
-    def export(self, model_fn, export_path, verbose=0):
+    def export(self, model_fn, export_path, verbose=0, **kwargs):
         inputs, dynamic_axes = [], {}
         for input in self.config.input:
             if input.dims[0] == -1:
@@ -143,6 +143,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             input_names=[x.name for x in self.config.input],
             output_names=[x.name for x in self.config.output],
             dynamic_axes=dynamic_axes or None,
+            **kwargs
         )
 
         # write the written bytes and return

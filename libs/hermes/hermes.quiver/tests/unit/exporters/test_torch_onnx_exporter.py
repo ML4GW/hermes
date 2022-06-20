@@ -1,3 +1,5 @@
+from unittest.mock import ANY, patch
+
 import pytest
 
 from hermes.quiver import Model, Platform
@@ -43,3 +45,27 @@ def test_torch_onnx_exporter(temp_local_repo, torch_model):
     exporter._check_exposed_tensors("input", input_shapes)
     assert len(model2.config.input) == 1
     assert model2.config.input[0].name == "input_0"
+
+
+@pytest.mark.torch
+def test_torch_onnx_exporter_with_kwargs(temp_local_repo, torch_model):
+    model_fn = torch_model
+
+    model = Model("test", temp_local_repo, Platform.ONNX)
+    exporter = TorchOnnx(model.config, model.fs)
+
+    version_path = temp_local_repo.fs.join("test", "1")
+    temp_local_repo.fs.soft_makedirs(version_path)
+    output_path = temp_local_repo.fs.join(version_path, "model.onnx")
+
+    with patch("hermes.quiver.exporters.torch_onnx.torch.onnx.export") as mock:
+        exporter.export(model_fn, output_path, opset_version=11)
+        mock.assert_called_with(
+            model_fn,
+            ANY,
+            ANY,
+            input_names=ANY,
+            output_names=ANY,
+            dynamic_axes=ANY,
+            opset_version=11,
+        )

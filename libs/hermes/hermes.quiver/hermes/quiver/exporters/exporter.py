@@ -181,6 +181,7 @@ class Exporter(metaclass=abc.ABCMeta):
         version: int,
         input_shapes: _SHAPES_TYPE = None,
         output_names: Optional[Sequence[str]] = None,
+        **kwargs,
     ):
         """Export a particular version of this platform's model
 
@@ -210,6 +211,10 @@ class Exporter(metaclass=abc.ABCMeta):
                 config for outputs, the inferred shapes will be
                 compared by name using the output names. Otherwise,
                 they'll be added to the config dynamically
+            **kwargs:
+                Any other keyword arguments to pass to `Exporter.export`.
+                Consult the relevant documentation.
+
         Returns:
             The path to which the model was exported
         """
@@ -240,7 +245,7 @@ class Exporter(metaclass=abc.ABCMeta):
         export_path = self.fs.join(
             self.config.name, str(version), conventions[self.platform]
         )
-        self.export(model_fn, export_path)
+        self.export(model_fn, export_path, **kwargs)
         return export_path
 
     @property
@@ -262,5 +267,5 @@ class Exporter(metaclass=abc.ABCMeta):
             )
 
     @abc.abstractmethod
-    def export(self, model_fn, export_path, verbose=0):
+    def export(self, model_fn, export_path, verbose=0, **kwargs):
         pass

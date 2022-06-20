@@ -185,7 +185,7 @@ class Model:
 
         try:
             export_path = exporter(
-                model_fn, version, input_shapes, output_names
+                model_fn, version, input_shapes, output_names, **kwargs
             )
             self.config.write()
         except Exception:
