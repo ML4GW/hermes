@@ -1,8 +1,0 @@
-name: gwftools
-channels:
-  - conda-forge
-dependencies:
-  - python=3.8
-  - gwpy=2.1.0
-  - astropy<5.0
-  - python-ldas-tools-framecpp
