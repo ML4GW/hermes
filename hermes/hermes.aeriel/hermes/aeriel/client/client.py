@@ -125,6 +125,7 @@ class InferenceClient:
         # will be a dictionary mapping from downstream input names
         # that the snapshotter feeds to the shape of that input
         self.inputs, self.states = self._build_inputs(batch_size)
+        self.num_states = sum([len(i[1]) for i in self.states])
 
         # infer the model version and make sure that the desired
         # model is ready to have requests made to it
@@ -283,12 +284,12 @@ class InferenceClient:
         sequence_start: bool = False,
         sequence_end: bool = False,
     ):
-        self._check_raise()
+        self.check_raise(do_raise=True)
 
         # if we just passed a single array, make sure we only
         # have one input or state that we need to pass it to
         if not isinstance(x, dict):
-            if len(self.inputs) + len(self.states) > 1:
+            if len(self.inputs) + self.num_states > 1:
                 raise ValueError(
                     "Only passed a single input array, but "
                     "model {} has {} inputs and {} states".format(
@@ -298,7 +299,8 @@ class InferenceClient:
             elif len(self.inputs) > 0:
                 x = {self.inputs[0].name(): x}
             else:
-                x = {self.states[0][0].name(): x}
+                state_name = list(self.states[0][1].keys())[0]
+                x = {state_name: x}
 
         if request_id is None:
             request_id = random.randint(0, 1e16)
@@ -428,7 +430,8 @@ class InferenceClient:
 
             # send these parsed outputs to downstream processes
             if self.postprocessor is not None:
-                self.postprocessor(np_output, request_id, sequence_id)
+                return self.postprocessor(np_output, request_id, sequence_id)
+            return np_output, request_id, sequence_id
 
         except Exception:
             self.callback_q.put(sys.exc_info())
