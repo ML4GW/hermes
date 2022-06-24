@@ -8,7 +8,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.8,<3.11"
 
 # generic utilities
 rich = "^10.7"
@@ -17,14 +17,16 @@ paramiko = "^2.7"
 scp = "^0.14"
 
 # google cloud utilities
-# TODO: make optional
-google-cloud-container = "^2.7"
-google-cloud-compute = "^0.5"
-google-cloud-storage = "^1.38"
+google-cloud-container = {version = "^2.7", optional = true}
+google-cloud-compute = {version = "^0.5", optional = true}
+google-cloud-storage = {version = "^1.38", optional = true}
+
+[tool.poetry.extras]
+gcp = ["google-cloud-container", "google-cloud-storage", "google-cloud-compute"]
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2"
 
-# documentation dependencies
-sphinx = "^4.1"
-sphinx-material = "^0.0.34"
+[build-system]
+requires = ["poetry>=1.2"]
+build-backend = "poetry.masonry.api"

@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "hermes.aeriel"
+version = "0.0.1"
+description = "Triton wrapper utilities"
+authors = [
+    "Alec Gunny <alec.gunny@ligo.org>",
+]
+packages = [
+    {include = "hermes"}
+]
+# readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.11"
+tritonclient = {extras = ["all"], version = "^2.18"}
+
+# Poetry unable to find the 1.22.4 package, and
+# 1.23 is incompatible with current version of
+# astropy we have to ues for gwpy compatibility,
+# so constrain this for now
+numpy = "<1.22.4"
+
+spython = {version = "^0.1", optional=true}
+
+[tool.poetry.extras]
+serve = ["spython"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^6.2"
+
+[build-system]
+requires = ["poetry>=1.2"]
+build-backend = "poetry.masonry.api"
