@@ -17,14 +17,6 @@ if TYPE_CHECKING:
 SHAPE = Tuple[int, ...]
 
 
-def _raise_no_match(attr, first, second):
-    raise ValueError(
-        "Package {}s don't all match. Found {}s {} and {}".format(
-            attr, attr, first, second
-        )
-    )
-
-
 class ProfilerClock:
     def __init__(self):
         self._start_times = {}
