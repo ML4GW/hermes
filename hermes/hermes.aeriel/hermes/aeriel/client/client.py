@@ -134,6 +134,7 @@ class InferenceClient:
         # an input to a snapshotter model, and the second
         # will be a dictionary mapping from downstream input names
         # that the snapshotter feeds to the shape of that input
+        self.model_name = model_name
         self.inputs, self.states = self._build_inputs(batch_size)
         self.num_states = sum([len(i[1]) for i in self.states])
 
@@ -142,8 +143,6 @@ class InferenceClient:
         if model_version == -1:
             model_version = max(map(int, self.metadata.versions))
         _check_ready(self.client, model_name, str(model_version))
-
-        self.model_name = model_name
         self.model_version = model_version
 
         # set some things up for the streaming callback
@@ -249,7 +248,11 @@ class InferenceClient:
         except Empty:
             return
         else:
-            if isinstance(response[0], Exception):
+            if (
+                isinstance(response, tuple)
+                and len(response) == 3
+                and isinstance(response[1], Exception)
+            ):
                 _, exc, tb = response
                 raise exc.with_traceback(tb)
             return response
