@@ -1,3 +1,13 @@
+# TODO: create custom future object which inherits from
+# concurrent.futures.Future and store in an
+# `InferenceClient.futures` dictionary that maps from a
+# (request_id, sequence_id) to the corresponding Future,
+# use request_id and sequence_id in callback to pop the
+# corresponding future and use `Future.set_result` or
+# `Future.set_exception` as required. Set request_id
+# and sequence_id attributes on the Future for use by
+# calling processes.
+
 import logging
 import random
 import sys
@@ -86,7 +96,7 @@ class InferenceClient:
             The batch size to use for the non-stateful inputs
             to the model. Inputs with batch sizes smaller than
             this will need to be padded.
-        postprocessor:
+        callback:
             Optional function to call on the parsed response
             from the inference service
         profile:
@@ -103,7 +113,7 @@ class InferenceClient:
         model_name: str,
         model_version: int = -1,
         batch_size: int = 1,
-        postprocessor: Optional[Callable] = None,
+        callback: Optional[Callable] = None,
         profile: bool = False,
         **client_kwargs,
     ) -> None:
@@ -137,7 +147,7 @@ class InferenceClient:
         self.model_version = model_version
 
         # set some things up for the streaming callback
-        self.postprocessor = postprocessor
+        self.callback = callback
         if profile:
             self.clock = ProfilerClock()
         else:
@@ -232,36 +242,25 @@ class InferenceClient:
 
         return inputs, states
 
-    def check_raise(self, do_raise: bool):
+    def get(self):
         """Check if the callback thread has run into an error"""
         try:
-            _, exc, tb = self.callback_q.get_nowait()
+            response = self.callback_q.get_nowait()
         except Empty:
             return
         else:
-            if do_raise:
+            if isinstance(response[0], Exception):
+                _, exc, tb = response
                 raise exc.with_traceback(tb)
+            return response
 
     def __enter__(self):
         self.client.__enter__()
         if len(self.states) > 0:
-            self.client.start_stream(callback=self.callback)
+            self.client.start_stream(callback=self._callback)
         return self
 
     def __exit__(self, *exc_args):
-        do_raise = False
-
-        # if we don't have another exception to raise,
-        # make one last check to see if anything has
-        # gone wrong in our callback. Record if it did
-        # so we know to raise the exception manually here
-        if exc_args[0] is not None:
-            exc_args = self.check_raise(do_raise=False)
-            if exc_args is None:
-                exc_args = [None] * 3
-            else:
-                do_raise = True
-
         # if we've run into an error, stop sending
         # requests to the server. Clear the client's
         # internal request queue and add its sentinel,
@@ -271,11 +270,6 @@ class InferenceClient:
             self.client._stream._request_queue.put(None)
         self.client.__exit__(*exc_args)
 
-        # if the callback caused an exception, raise it here
-        if do_raise:
-            _, exc, tb = exc_args
-            raise exc.with_traceback(tb)
-
     def infer(
         self,
         x: Union[np.ndarray, Dict[str, np.ndarray]],
@@ -284,8 +278,6 @@ class InferenceClient:
         sequence_start: bool = False,
         sequence_end: bool = False,
     ):
-        self.check_raise(do_raise=True)
-
         # if we just passed a single array, make sure we only
         # have one input or state that we need to pass it to
         if not isinstance(x, dict):
@@ -383,7 +375,7 @@ class InferenceClient:
                 timeout=60,
             )
 
-    def callback(self, result, error=None) -> None:
+    def _callback(self, result, error=None) -> None:
         """Callback for Triton async inference calls"""
 
         # wrap everything in a try catch in case either
@@ -429,9 +421,12 @@ class InferenceClient:
                 np_output = np_output[output.name]
 
             # send these parsed outputs to downstream processes
-            if self.postprocessor is not None:
-                return self.postprocessor(np_output, request_id, sequence_id)
-            return np_output, request_id, sequence_id
+            response = (np_output, request_id, sequence_id)
+            if self.callback is not None:
+                response = self.callback(*response)
+
+            if response is not None:
+                self.callback_q.put(response)
 
         except Exception:
             self.callback_q.put(sys.exc_info())

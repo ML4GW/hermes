@@ -112,7 +112,7 @@ def test_inference_client(mock1, mock2, num_inputs, num_states, version):
             "localhost:8001",
             "dummy-model",
             version,
-            postprocessor=postprocessor,
+            callback=postprocessor,
         )
 
         method = "async_stream_infer" if num_states > 0 else "async_infer"
