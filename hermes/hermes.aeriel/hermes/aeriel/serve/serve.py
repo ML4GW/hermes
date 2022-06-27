@@ -26,12 +26,6 @@ class SingularityInstance:
         return self._instance.name
 
     def run(self, command: str, background: bool = False) -> Optional[str]:
-        command = "/bin/bash -c '{command}'"
-        logging.debug(
-            "Executing command '{}' in singularity instance {}".format(
-                command, self.name
-            )
-        )
         if background and self._thread is not None:
             raise ValueError(
                 "Can't run command '{}' in background, already "
@@ -48,6 +42,12 @@ class SingularityInstance:
             )
             self._thread.start()
         else:
+            logging.debug(
+                "Executing command '{}' in singularity instance {}".format(
+                    command, self.name
+                )
+            )
+            command = ["/bin/bash", "-c", command]
             response = SingularityClient.execute(self._instance, command)
 
             # check if this is being called from the separate
@@ -152,7 +152,7 @@ def serve(
 
     # add in any additional arguments to the server
     if server_args is not None:
-        cmd += " ".join(server_args)
+        cmd += " " + " ".join(server_args)
 
     # if we specified a log file, reroute stdout and stderr
     # to that file (triton primarily uses stderr)
