@@ -15,7 +15,7 @@ The `aeriel.serve` submodule also includes a Python context manager for spinning
 
 ### [`hermes.cloudbreak`](./hermes/hermes.cloudbreak)
 #### Cloud orchestration and deployment
-`cloudbreak` contains utilities for orchestrating and deploying workloads on cloud-based resources via simple APIs in a cloud-agnostic manner (though only Google Cloud is supported as a backend [at the moment](./issues/2)). This includes both Kubernetes clusters and swarms of VMs to perform parallel inference.
+`cloudbreak` contains utilities for orchestrating and deploying workloads on cloud-based resources via simple APIs in a cloud-agnostic manner (though only Google Cloud is supported as a backend [at the moment](/../../issues/2)). This includes both Kubernetes clusters and swarms of VMs to perform parallel inference.
 
 ### [`hermes.quiver`](./hermes/hermes.quiver)
 #### Model export and acceleration
@@ -29,9 +29,9 @@ The `stillwater` submodule assists in building asychronous inference pipelines b
 
 
 ## Installation
-Hermes is not [currently](./issues/10) hosted on [PyPI](./issues/11), so to install you'll need to clone this repo and add the submodule(s) you require via [Poetry](https://python-poetry.org).
+Hermes is not [currently](/../../issues/10) hosted on [PyPI](/../../issues/11), so to install you'll need to clone this repo and add the submodule(s) you require via [Poetry](https://python-poetry.org).
 
 ## Stability and Development
-Hermes is still very much a work in progress, but the fastest path towards making it more robust is broader adoption! To that end, we warn users that they may experience bugs as they deploy Hermes to new and novel problems, and encourage them to file [issues](./issues) on this page and if they can, consider contributing a [PR](https://github.com/ML4GW/hermes/pulls) to fix whatever bug they stumbled upon!
+Hermes is still very much a work in progress, but the fastest path towards making it more robust is broader adoption! To that end, we warn users that they may experience bugs as they deploy Hermes to new and novel problems, and encourage them to file [issues](/../../issues) on this page and if they can, consider contributing a [PR](https://github.com/ML4GW/hermes/pulls) to fix whatever bug they stumbled upon!
 
 Development of Hermes requires Poetry for managing and testing individual submodules. Moreover, it's highly encouraged to `poetry install` the root project, then run `poetry run pre-commit install --all` to install pre-commit hooks for style checking and static linting. For more information, see our [contribution guidelines](./CONTRIBUTING.md)
