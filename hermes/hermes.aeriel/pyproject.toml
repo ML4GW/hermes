@@ -1,10 +1,8 @@
 [tool.poetry]
 name = "hermes.aeriel"
-version = "0.0.1"
+version = "0.1.0"
 description = "Triton wrapper utilities"
-authors = [
-    "Alec Gunny <alec.gunny@ligo.org>",
-]
+authors = ["Alec Gunny <alecg@mit.edu>"]
 packages = [
     {include = "hermes"}
 ]

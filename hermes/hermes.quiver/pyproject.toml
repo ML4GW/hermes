@@ -2,10 +2,11 @@
 name = "hermes.quiver"
 version = "0.1.0"
 description = "Model export utilities"
-authors = ["Alec Gunny <alec.gunny@gmail.com>"]
+authors = ["Alec Gunny <alecg@mit.edu>"]
 packages = [
     {include = "hermes"}
 ]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
@@ -19,6 +20,7 @@ tensorflow = {version = "^2.3", optional = true }
 # explicitly adding a libclang dependency for now
 # due to this transient issue
 # https://pythonissues.com/issues/2674747
+# TODO: check if this has been resolved
 libclang = {version = "<12.0", optional = true}
 
 # torch optional dependencies
