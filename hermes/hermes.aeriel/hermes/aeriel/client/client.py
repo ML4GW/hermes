@@ -14,7 +14,16 @@ import sys
 import time
 from collections import defaultdict
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import tritonclient.grpc as triton
@@ -44,12 +53,22 @@ class ProfilerClock:
 def _check_ready(
     client: triton.InferenceServerClient, model_name: str, model_version: str
 ) -> None:
+    """
+    Check if the given model and version are ready on an inference
+    service instance which is being connected to by `client`
+    """
+
     if not client.is_model_ready(model_name, model_version):
+        # the desired model and version aren't ready, so
+        # see if we can load the model into the service
         try:
             logging.info(f"Attempting to load model {model_name}")
             client.load_model(model_name)
             logging.info(f"Model {model_name} loaded")
         except InferenceServerException as e:
+            # catch an exeption indicating that Triton doesn't
+            # have explicit control mode on, and raise it
+            # more explicitly
             if str(e).endswith("polling is enabled"):
                 raise RuntimeError(
                     "Model {}, version {} isn't ready on server "
@@ -59,13 +78,11 @@ def _check_ready(
                 )
             else:
                 raise
-        else:
-            raise RuntimeError(
-                "Model {} version {} isn't ready on server".format(
-                    model_name, model_version
-                )
-            )
+
     if not client.is_model_ready(model_name, model_version):
+        # evidently we were able to load the model, but
+        # the desired version didn't get loaded with it,
+        # so we're out of options here and need to bail
         raise RuntimeError(
             "Model {} is available but not version {}".format(
                 model_name, model_version
@@ -74,14 +91,13 @@ def _check_ready(
 
 
 class InferenceClient:
-    """Process for making asynchronous requests to a Triton inference service
+    """Connect to a Triton server instance and make requests to it
 
-    Make asynchronous requests to a Triton inference service
-    in a separate process in order to make requests in tandem
-    with data pre- and post-processing. Uses model metadata to
-    build input protobufs and dynamically detects the presence
-    of snapshotter states, exposing metadata about those states
-    for building data generators.
+    Connect to a Triton inference service instance running at
+    the specified address for performing inference with the
+    indicated model. Dynamically infer the names, shapes, and
+    datatypes of the inputs to the model, as well as whether
+    any of those inputs are meant to be stateful.
 
     Args:
         address:
@@ -95,7 +111,8 @@ class InferenceClient:
         batch_size:
             The batch size to use for the non-stateful inputs
             to the model. Inputs with batch sizes smaller than
-            this will need to be padded.
+            this will need to be padded since the full batch
+            dimension will be strictly enforced.
         callback:
             Optional function to call on the parsed response
             from the inference service
@@ -176,6 +193,8 @@ class InferenceClient:
         config = self.client.get_model_config(self.model_name).config
         metadata = self.client.get_model_metadata(self.model_name)
 
+        # TODO: check for stateful outputs for enforcing a
+        # sequence_id value in `InferenceClient.infer`
         states, inputs = [], []
         for config_input, metadata_input in zip(config.input, metadata.inputs):
             shape = [i if i > 0 else batch_size for i in metadata_input.shape]
@@ -241,21 +260,72 @@ class InferenceClient:
 
         return inputs, states
 
-    def get(self):
-        """Check if the callback thread has run into an error"""
-        try:
-            response = self.callback_q.get_nowait()
-        except Empty:
-            return
-        else:
-            if (
-                isinstance(response, tuple)
-                and len(response) == 3
-                and isinstance(response[1], Exception)
-            ):
-                _, exc, tb = response
-                raise exc.with_traceback(tb)
-            return response
+    def get(self, until_empty: bool = False) -> Union[Any, List[Any], None]:
+        """Check the if the callback thread has produced anything
+
+        Makes a check to see if the callback thread has produced
+        any inference responses since the last check. If any
+        errors have been raised in the callback, they will get
+        raised with their traceback here.
+
+        Args:
+            until_empty:
+                If `True`, grab server responses from the
+                `callback_q` until `queue.Empty` gets raised,
+                and return a list containing all the responses.
+                Otherwise, return the first reponse produced by
+                the `callback_q`.
+        Returns:
+            If `until_empty` is `True`, returns a `list` of
+            each of the server responses waiting in the
+            `callback_q`. Otherwise, if there is a response
+            in the `callback_q`, return it, returning `None`
+            if the queue is empty.
+        Raises:
+            Exception:
+                If `sys.exc_info()` is retrieved from the
+                `callback_q`, the exception will be raised
+                with its traceback in the callback thread.
+        """
+
+        responses = []
+        while True:
+            try:
+                response = self.callback_q.get_nowait()
+            except Empty:
+                # there's nothing in the queue
+                if until_empty:
+                    # stop looking for more responses and
+                    # return whatever we found, even if
+                    # its an empty list
+                    break
+
+                # otherwise return `None`
+                return
+            else:
+                if (
+                    isinstance(response, tuple)
+                    and len(response) == 3
+                    and isinstance(response[1], Exception)
+                ):
+                    # complicated check that this looks like the
+                    # return from sys.exc_info(), indicating that
+                    # something went wrong in the callback
+                    _, exc, tb = response
+                    raise exc.with_traceback(tb)
+
+                if not until_empty:
+                    # we got a response and we only asked
+                    # for one, so return it
+                    return response
+                else:
+                    # otherwise add it to our running list
+                    responses.append(response)
+
+        # this must mean `until_empty is True`, so
+        # return all the responses we got, even if
+        # there were no responses at all
+        return responses
 
     def __enter__(self):
         self.client.__enter__()
@@ -280,7 +350,58 @@ class InferenceClient:
         sequence_id: Optional[int] = None,
         sequence_start: bool = False,
         sequence_end: bool = False,
-    ):
+    ) -> None:
+        """Make an asynchronous inference request to the service
+
+        Use the indicated input or inputs to make an inference
+        request to the model sitting on the inference service.
+        If this model requires multiple inputs or states, `x`
+        should be a dictionary mapping from the name of each
+        input or state to the corresponding value. Otherwise,
+        `x` may be a single numpy array representing the input
+        data for this inference request.
+
+        Responses from the inference service will be handled
+        in an asynchronous callback thread, with the parsed and
+        postprocessed values placed in this object's `callback_q`.
+        As a simple way to retrieve the values from that queue,
+        consider using the `InferenceClient.get` method.
+
+        Responses follow the same structure as the inputs: if
+        there are multiple outputs, the response will be a
+        dictionary mapping from output names to values. If there
+        is only a single output, it will be returned as a NumPy
+        array.
+
+        Args:
+            x:
+                The inputs to the model sitting on the server.
+                If the model has multiple inputs (stateful or
+                stateless), this should be a `dict` mapping from
+                input names to corresopnding NumPy arrays. If
+                the model has only a single input, this may be
+                a single NumPy array containing that input's value.
+            request_id:
+                An identifier to associate with this inference request.
+                Will be passed along to the `callback` specified
+                at initialization, or if this is `None` it will
+                be placed in the `callback_q` alongside the response
+                values.
+            sequence_id:
+                An identifier to associate this request with a particular
+                state on the inference server. Required if the
+                indicated model has any stateful inputs, otherwise
+                won't do anything.
+            sequence_start:
+                Indicates whether this request is the first in a
+                new sequence. Won't do anything if the
+                model has no stateful inputs.
+            sequence_end:
+                Indicates whether this request is the final one
+                in a sequence. Won't do anything if the model has
+                no stateful inputs.
+        """
+
         # if we just passed a single array, make sure we only
         # have one input or state that we need to pass it to
         if not isinstance(x, dict):
@@ -292,14 +413,24 @@ class InferenceClient:
                     )
                 )
             elif len(self.inputs) > 0:
+                # if we only have a non-stateful input, set `x`
+                # up to keep the parsing methods below more standard
                 x = {self.inputs[0].name(): x}
             else:
+                # same for if we only have a stateful input
                 state_name = list(self.states[0][1].keys())[0]
                 x = {state_name: x}
 
         if request_id is None:
+            # if a request_id wasn't specified, give it a random
+            # one that will (probably) be unique
             request_id = random.randint(0, 1e16)
+
         if sequence_id is None and len(self.states) > 0:
+            # enforce that we provide a sequence id if
+            # there are any stateful inputs. TODO: should
+            # we do the same if there are any stateful outputs?
+            # Or just states somewhere in the model in general?
             raise ValueError(
                 "Must provide sequence id for model with states {}".format(
                     [i[0].name() for i in self.states]
@@ -358,6 +489,9 @@ class InferenceClient:
             request_id = f"{request_id}_{sequence_id}"
 
         if len(self.states) > 0:
+            # make a streaming inference if we have input states
+            # TODO: don't restrict ourselves just to input states
+            # but having stateful behavior anywhere in the model
             self.client.async_stream_infer(
                 self.model_name,
                 model_version=str(self.model_version),
@@ -420,6 +554,9 @@ class InferenceClient:
             for output in result._result.outputs:
                 np_output[output.name] = result.as_numpy(output.name)
 
+            # if there's only one output, just return the numpy
+            # array and spare the user the need to keep track
+            # of input and output names
             if len(np_output) == 1:
                 np_output = np_output[output.name]
 
@@ -428,6 +565,9 @@ class InferenceClient:
             if self.callback is not None:
                 response = self.callback(*response)
 
+            # give callbacks the option of returning `None`
+            # if all they have is some intermediate product
+            # that they don't want shipped back to the main thread.
             if response is not None:
                 self.callback_q.put(response)
 
