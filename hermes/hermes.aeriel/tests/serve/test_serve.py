@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hermes.aeriel import serve
+from hermes.aeriel.serve import serve
 
 
 @pytest.fixture(params=[None, [0], [3, 4]])
@@ -21,26 +21,28 @@ def server_args(request):
     return request.param
 
 
-def execute(cmd):
+def execute(instance, cmd):
     return cmd[-1]
 
 
 @patch("spython.main.Client.instance")
 @patch("spython.main.Client.execute", new=execute)
-def test_singularity_instance_run(
-    instance_mock, execute_mock, gpus, log_file, server_args
-):
+def test_singularity_instance_run(execute_mock, gpus, log_file, server_args):
     with serve(
         "/path/to/repo",
         "/path/to/image",
         gpus=gpus,
-        server_arg=None if server_args is None else server_args.split(),
+        server_args=None if server_args is None else server_args.split(),
         log_file=log_file,
     ) as instance:
-        time.sleep(1e-3)
+        time.sleep(1e-2)
+        command = instance._response_queue.get_nowait()
 
-    command = instance._response_queue.get_nowait()
+    assert instance._thread is None
+    assert instance._response_queue is None
+
     if gpus is not None:
+        gpus = map(str, gpus)
         assert command.startswith("CUDA_VISIBLE_DEVICES=" + ",".join(gpus))
     else:
         assert command.startswith("/opt/tritonserver/bin/tritonserver")

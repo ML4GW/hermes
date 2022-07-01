@@ -27,5 +27,5 @@ serve = ["spython"]
 pytest = "^6.2"
 
 [build-system]
-requires = ["poetry>=1.2"]
+requires = ["poetry>=1.2.0a2"]
 build-backend = "poetry.masonry.api"

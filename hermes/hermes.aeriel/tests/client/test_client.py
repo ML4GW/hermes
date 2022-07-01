@@ -116,7 +116,7 @@ def test_inference_client(mock1, mock2, num_inputs, num_states, version):
         )
 
         method = "async_stream_infer" if num_states > 0 else "async_infer"
-        new = AddOneStream(client.callback if num_states > 0 else None)
+        new = AddOneStream(client._callback)
         with patch(
             f"tritonclient.grpc.InferenceServerClient.{method}", new=new
         ):
