@@ -1,6 +1,6 @@
 # Hermes
 ## Deep Learning Inference-as-a-Service Deployment Utilties
-`hermes` is a set of libraries for simplifying the deployment of deep learning applications via [Triton Inference Server (INSERT LINK)](https://github.com/triton-inference-server/server). Each library is installed and managed independently to keep deployments lightweight and minimize dependencies for use.
+`hermes` is a set of libraries for simplifying the deployment of deep learning applications via [Triton Inference Server](https://github.com/triton-inference-server/server). Each library is installed and managed independently to keep deployments lightweight and minimize dependencies for use.
 However, components are designed to play well together across libraries in order to minimize the overhead required to create new, exciting applications.
 
 `hermes` is particularly aimed at streaming timeseries use cases, like those found in [gravitational](https://github.com/ML4GW/DeepClean) [wave](https://github.com/ML4GW/BBHNet) [physics](https://github.com/ml4gw/pe). In particular, it includes helpful APIs for exposing input and output states on the server to minimize data I/O, as outlined in [arXiv:2108.12430](https://arxiv.org/abs/2108.12430) and [doi.org/10.1145/3526058.3535454](https://dl.acm.org/doi/10.1145/3526058.3535454).
