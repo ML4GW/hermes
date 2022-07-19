@@ -1,3 +1,4 @@
+import logging
 import re
 import sys
 import threading
@@ -13,7 +14,7 @@ from hermes.stillwater.logging import listener
 from hermes.stillwater.process import PipelineProcess
 
 _uuid_pattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-_process_format = r'(?<=nv_inference_{}_{}\{{gpu_uuid="GPU-)'
+_process_format = r'(?<=nv_inference_{}_{}\{{)'  # gpu_uuid="GPU-)'
 _processes = [
     "queue",
     "compute_input",
@@ -30,7 +31,7 @@ def _get_re(prefix: str, model: str, version: int):
         "".join(
             [
                 prefix,
-                f'(?P<gpu_id>{_uuid_pattern})",',
+                # f'(?P<gpu_id>{_uuid_pattern})",',
                 f'model="{model}",',
                 rf'version="{version}"\}} ',
                 "(?P<value>[0-9.]+)",
@@ -178,7 +179,7 @@ class ServerMonitor(PipelineProcess):
         # check for HTTP errors then decode the response
         response.raise_for_status()
         content = response.content.decode()
-
+ 
         lines = []
         for model, processes in self.res.items():
             tracker = self.trackers[ip][model]
@@ -186,7 +187,10 @@ class ServerMonitor(PipelineProcess):
             # for each model, first find out how many times
             # that model was executed on each GPU
             counts = {}
-            for gpu_id, value in processes["count"].findall(content):
+            matches = processes["count"].findall(content)
+            gpu_id = "1"
+            # for gpu_id, value in matches:
+            for value in matches:
                 value = int(float(value))
                 try:
                     last = tracker["count"][gpu_id]
@@ -211,7 +215,9 @@ class ServerMonitor(PipelineProcess):
             # on each subprocess for each GPU
             durs = defaultdict(dict)
             for process in _processes:
-                for gpu_id, value in processes[process].findall(content):
+                matches = processes[process].findall(content)
+                # for gpu_id, value in matches:
+                for value in matches:
                     value = int(float(value))
                     try:
                         last = tracker[process][gpu_id]
@@ -263,8 +269,12 @@ class ServerMonitor(PipelineProcess):
         try:
             while not self.stopped:
                 lines = self.parse_for_ip(ip)
-                self.write("\n" + "\n".join(lines))
+                if lines:
+                    self.write("\n" + "\n".join(lines))
+                time.sleep(0.1)
         except Exception as e:
+            if self.stopped:
+                return
             self.logger.error(f"Encountered error in parsing ip {ip}:\n {e}")
             self.stop()
             raise
@@ -295,6 +305,7 @@ class ServerMonitor(PipelineProcess):
             self.cleanup(e)
             exitcode = 1
         finally:
+            self.stop()
             self._f.close()
             self._f = None
 
