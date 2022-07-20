@@ -2,55 +2,46 @@
 # TYPE nv_inference_request_success counter
 nv_inference_request_success{model="ensemble",version="1"} 0.000000
 nv_inference_request_success{model="stream",version="1"} 0.000000
-nv_inference_request_success{model="stream_0",version="1"} 0.000000
 nv_inference_request_success{model="test-model",version="1"} 0.000000
 # HELP nv_inference_request_failure Number of failed inference requests, all batch sizes
 # TYPE nv_inference_request_failure counter
 nv_inference_request_failure{model="ensemble",version="1"} 0.000000
 nv_inference_request_failure{model="stream",version="1"} 0.000000
-nv_inference_request_failure{model="stream_0",version="1"} 0.000000
 nv_inference_request_failure{model="test-model",version="1"} 0.000000
 # HELP nv_inference_count Number of inferences performed (does not include cached requests)
 # TYPE nv_inference_count counter
 nv_inference_count{model="ensemble",version="1"} 0.000000
 nv_inference_count{model="stream",version="1"} 0.000000
-nv_inference_count{model="stream_0",version="1"} 0.000000
 nv_inference_count{model="test-model",version="1"} 0.000000
 # HELP nv_inference_exec_count Number of model executions performed (does not include cached requests)
 # TYPE nv_inference_exec_count counter
 nv_inference_exec_count{model="ensemble",version="1"} 0.000000
 nv_inference_exec_count{model="stream",version="1"} 0.000000
-nv_inference_exec_count{model="stream_0",version="1"} 0.000000
 nv_inference_exec_count{model="test-model",version="1"} 0.000000
 # HELP nv_inference_request_duration_us Cumulative inference request duration in microseconds (includes cached requests)
 # TYPE nv_inference_request_duration_us counter
 nv_inference_request_duration_us{model="ensemble",version="1"} 0.000000
 nv_inference_request_duration_us{model="stream",version="1"} 0.000000
-nv_inference_request_duration_us{model="stream_0",version="1"} 0.000000
 nv_inference_request_duration_us{model="test-model",version="1"} 0.000000
 # HELP nv_inference_queue_duration_us Cumulative inference queuing duration in microseconds (includes cached requests)
 # TYPE nv_inference_queue_duration_us counter
 nv_inference_queue_duration_us{model="ensemble",version="1"} 0.000000
 nv_inference_queue_duration_us{model="stream",version="1"} 0.000000
-nv_inference_queue_duration_us{model="stream_0",version="1"} 0.000000
 nv_inference_queue_duration_us{model="test-model",version="1"} 0.000000
 # HELP nv_inference_compute_input_duration_us Cumulative compute input duration in microseconds (does not include cached requests)
 # TYPE nv_inference_compute_input_duration_us counter
 nv_inference_compute_input_duration_us{model="ensemble",version="1"} 0.000000
 nv_inference_compute_input_duration_us{model="stream",version="1"} 0.000000
-nv_inference_compute_input_duration_us{model="stream_0",version="1"} 0.000000
 nv_inference_compute_input_duration_us{model="test-model",version="1"} 0.000000
 # HELP nv_inference_compute_infer_duration_us Cumulative compute inference duration in microseconds (does not include cached requests)
 # TYPE nv_inference_compute_infer_duration_us counter
 nv_inference_compute_infer_duration_us{model="ensemble",version="1"} 0.000000
 nv_inference_compute_infer_duration_us{model="stream",version="1"} 0.000000
-nv_inference_compute_infer_duration_us{model="stream_0",version="1"} 0.000000
 nv_inference_compute_infer_duration_us{model="test-model",version="1"} 0.000000
 # HELP nv_inference_compute_output_duration_us Cumulative inference compute output duration in microseconds (does not include cached requests)
 # TYPE nv_inference_compute_output_duration_us counter
 nv_inference_compute_output_duration_us{model="ensemble",version="1"} 0.000000
 nv_inference_compute_output_duration_us{model="stream",version="1"} 0.000000
-nv_inference_compute_output_duration_us{model="stream_0",version="1"} 0.000000
 nv_inference_compute_output_duration_us{model="test-model",version="1"} 0.000000
 # HELP nv_cache_num_entries Number of responses stored in response cache
 # TYPE nv_cache_num_entries gauge
@@ -70,13 +61,11 @@ nv_inference_compute_output_duration_us{model="test-model",version="1"} 0.000000
 # TYPE nv_cache_num_hits_per_model counter
 nv_cache_num_hits_per_model{model="ensemble",version="1"} 0.000000
 nv_cache_num_hits_per_model{model="stream",version="1"} 0.000000
-nv_cache_num_hits_per_model{model="stream_0",version="1"} 0.000000
 nv_cache_num_hits_per_model{model="test-model",version="1"} 0.000000
 # HELP nv_cache_hit_lookup_duration_per_model Total cache hit lookup duration per model, in microseconds
 # TYPE nv_cache_hit_lookup_duration_per_model counter
 nv_cache_hit_lookup_duration_per_model{model="ensemble",version="1"} 0.000000
 nv_cache_hit_lookup_duration_per_model{model="stream",version="1"} 0.000000
-nv_cache_hit_lookup_duration_per_model{model="stream_0",version="1"} 0.000000
 nv_cache_hit_lookup_duration_per_model{model="test-model",version="1"} 0.000000
 # HELP nv_gpu_utilization GPU utilization rate [0.0 - 1.0)
 # TYPE nv_gpu_utilization gauge

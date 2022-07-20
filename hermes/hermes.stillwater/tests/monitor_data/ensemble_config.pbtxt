@@ -34,7 +34,7 @@ ensemble_scheduling {
     }
   }
   step {
-    model_name: "stream_0"
+    model_name: "stream"
     model_version: -1
     input_map {
       key: "stream"

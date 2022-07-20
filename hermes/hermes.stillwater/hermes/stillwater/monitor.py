@@ -28,7 +28,7 @@ def _get_re(process: str, metric: str, model: str, version: int):
 
     prefix = f"nv_inference_{process}_{metric}"
     identifier = rf'\{{model="{model}",version="{version}"\}}'
-    return re.compile(f"(?<={prefix}{identifier} )[0-9.]+$")
+    return re.compile(f"(?m)(?<={prefix}{identifier} )[0-9.]+$")
 
 
 class ServerMonitor(PipelineProcess):
@@ -124,14 +124,13 @@ class ServerMonitor(PipelineProcess):
                 # TODO: is this necessary? Or was there another
                 # reason for adding this that I'm forgetting?
                 uniques = set(zip(models, versions))
-                models, versions = zip(*list(uniques))
 
                 # now go through and reaggregate our model
                 # names and versions, checking for models
                 # that indicate that they would like to use
                 # the latest version and inferring that version
                 models, versions = [], []
-                for model, version in zip(*list(uniques)):
+                for model, version in list(uniques):
                     models.append(model)
 
                     if version == -1:
@@ -177,6 +176,7 @@ class ServerMonitor(PipelineProcess):
                     )
 
         super().__init__(**kwargs)
+        self.filename = filename
         self.max_request_rate = max_request_rate
 
     def parse_for_ip(
@@ -191,11 +191,20 @@ class ServerMonitor(PipelineProcess):
 
         lines = []
         for model, version in zip(self.models, self.versions):
+            try:
+                model_tracker = tracker[model]
+            except KeyError:
+                raise ValueError(
+                    "Tracker for models {} can't track model {}".format(
+                        ",".join(list(tracker)), model
+                    )
+                )
+
             # for each model, first find out how many times
             # that model was executed on each GPU
             count_re = _get_re("exec", "count", model, version)
-            count = count_re.find(content)
-            if count_re is None:
+            count = count_re.search(content)
+            if count is None:
                 # sometimes Triton won't be able to collect metrics,
                 # so raise an error if there's no data available
                 raise ValueError(
@@ -204,9 +213,9 @@ class ServerMonitor(PipelineProcess):
                     "response was:\n{}".format(model, version, ip, content)
                 )
 
-            count = int(float(count))
+            count = int(float(count.group(0)))
             try:
-                last = tracker["count"]
+                last = model_tracker["count"]
             except KeyError:
                 # we haven't recorded executions for this
                 # model yet, so there's no diff to record.
@@ -219,7 +228,7 @@ class ServerMonitor(PipelineProcess):
                 # since the last request we made
                 diff = count - last
 
-            tracker["count"] = count
+            model_tracker["count"] = count
             if diff == 0:
                 # don't bother if no new inferences happened
                 continue
@@ -233,10 +242,11 @@ class ServerMonitor(PipelineProcess):
             # now collect the amount of time spent on each subprocess
             for process in _processes:
                 dur_re = _get_re(process, "duration_us", model, version)
-                duration = int(float(dur_re.find(content)))
+                # TODO: catch a miss here
+                duration = int(float(dur_re.search(content).group(0)))
 
                 try:
-                    last = tracker[process]
+                    last = model_tracker[process]
                 except KeyError:
                     # we don't have an entry for this process yet, so
                     # record one in the `finally` clause but then move on
@@ -246,9 +256,7 @@ class ServerMonitor(PipelineProcess):
                     diff = duration - last
                     line += "," + str(diff)
                 finally:
-                    tracker[process] = duration
-
-                tracker[process] = duration
+                    model_tracker[process] = duration
 
             if line is not None:
                 lines.append(line)
@@ -258,7 +266,7 @@ class ServerMonitor(PipelineProcess):
         self,
         ip: str,
         http: urllib3.PoolManager,
-        f: TextIOWrapper,
+        f: "TextIOWrapper",
         lock: threading.Lock,
     ) -> None:
         """Thread target for iteratively collecting metrics from a service"""
@@ -266,7 +274,7 @@ class ServerMonitor(PipelineProcess):
         # since Triton metrics are cumulative, use a dict
         # to keep track of the values at each iteration so
         # that we can record the diffs
-        tracker = {}
+        tracker = {model: {} for model in self.models}
         try:
             while not self.stopped:
                 lines = self.parse_for_ip(ip, http, tracker)
