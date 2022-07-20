@@ -1,0 +1,45 @@
+name: "stream"
+platform: "tensorflow_savedmodel"
+input {
+  name: "stream"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 16
+}
+output {
+  name: "snapshotter"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 64
+}
+instance_group {
+  count: 1
+  kind: KIND_GPU
+}
+sequence_batching {
+  max_sequence_idle_microseconds: 10000000
+  control_input {
+    name: "sequence_start"
+    control {
+      fp32_false_true: 0.0
+      fp32_false_true: 1.0
+    }
+  }
+  direct {
+  }
+}
+model_warmup {
+  name: "zeros_warmup"
+  inputs {
+    key: "stream"
+    value {
+      data_type: TYPE_FP32
+      dims: 1
+      dims: 2
+      dims: 16
+      zero_data: true
+    }
+  }
+}
