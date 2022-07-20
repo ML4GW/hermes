@@ -1,0 +1,48 @@
+name: "ensemble"
+platform: "ensemble"
+input {
+  name: "stream"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 16
+}
+output {
+  name: "output"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 64
+}
+parameters {
+  key: "states"
+  value {
+    string_value: "test-model/input"
+  }
+}
+ensemble_scheduling {
+  step {
+    model_name: "test-model"
+    model_version: -1
+    input_map {
+      key: "input"
+      value: "snapshotter"
+    }
+    output_map {
+      key: "output"
+      value: "output"
+    }
+  }
+  step {
+    model_name: "stream_0"
+    model_version: -1
+    input_map {
+      key: "stream"
+      value: "stream"
+    }
+    output_map {
+      key: "snapshotter"
+      value: "snapshotter"
+    }
+  }
+}

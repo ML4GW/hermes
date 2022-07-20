@@ -1,0 +1,16 @@
+name: "test-model"
+platform: "onnxruntime_onnx"
+input {
+  name: "input"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 64
+}
+output {
+  name: "output"
+  data_type: TYPE_FP32
+  dims: 1
+  dims: 2
+  dims: 64
+}
