@@ -302,9 +302,9 @@ class ServerMonitor(PipelineProcess):
             # to the file in a thread-safe manner
             http = urllib3.PoolManager()
             lock = threading.Lock()
-            with ThreadPoolExecutor(len(self.trackers)) as ex:
+            with ThreadPoolExecutor(len(self.ips)) as ex:
                 args = (http, f, lock)
-                fs = [ex.submit(self.target, i, *args) for i in self.trackers]
+                fs = [ex.submit(self.target, i, *args) for i in self.ips]
 
             # wait until all the threads are done
             # (i.e. self.stopped == True, or an exception
