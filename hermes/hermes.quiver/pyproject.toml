@@ -10,7 +10,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
-tritonclient = {extras = ["all"], version = "^2.18"}
+tritonclient = {extras = ["all"], version = "^2.22"}
 protobuf = "^3.17"
 requests = "^2.26.0"
 
