@@ -19,10 +19,10 @@ jobs:
       id: filter
       with:
         filters: |
-          aeriel: hermes/hermes.aeriel
-          cloudbreak: hermes/hermes.cloudbreak
-          quiver: hermes/hermes.quiver
-          stillwater: hermes/hermes.stillwater
+          aeriel: 'hermes/hermes.aeriel/**'
+          cloudbreak: 'hermes/hermes.cloudbreak/**'
+          quiver: 'hermes/hermes.quiver/**'
+          stillwater: 'hermes/hermes.stillwater/**'
 
   test:
     runs-on: ubuntu-latest
