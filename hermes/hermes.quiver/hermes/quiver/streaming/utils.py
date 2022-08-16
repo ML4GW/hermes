@@ -27,27 +27,31 @@ def add_streaming_model(
             input_name: (1,) + input_shape,
             state_name: (1,) + state_shape,
         },
-        output_names=output_names,
+        output_names=output_names + [state_name],
     )
 
     state_input = model.config.input.pop(-1)
+    _ = model.config.output.pop(-1)
     state = model_config.ModelSequenceBatching.State(
         dims=state_input.dims,
         input_name=state_name,
         output_name=state_name,
         data_type=state_input.data_type,
-        initial_state=model_config.ModelSequenceBatching.IniitalState(
-            name="zero_snapshot",
-            data_type=state_input.data_type,
-            zero_data=True,
-            dims=state_input.dims,
-        ),
+        initial_state=[
+            model_config.ModelSequenceBatching.InitialState(
+                name="zero_snapshot",
+                data_type=state_input.data_type,
+                zero_data=True,
+                dims=state_input.dims,
+            )
+        ],
     )
     sequence_batching = model_config.ModelSequenceBatching(
         max_sequence_idle_microseconds=10000000,
         direct=model_config.ModelSequenceBatching.StrategyDirect(),
-        state=state,
+        state=[state],
     )
     model.config.sequence_batching.MergeFrom(sequence_batching)
+    model.config.add_instance_group(count=streams_per_gpu)
     model.config.write()
     return model

@@ -40,17 +40,19 @@ class Snapshotter(torch.nn.Module):
         if self.batch_size > 1:
             snapshots = snapshot[:, :, None]
             snapshots = self.unfold(snapshots)
-            snapshots = snapshots.reshape(
-                sum(self.channels_per_snapshot), self.batch_size, -1
-            )
+
+            num_channels = sum([i or 1 for i in self.channels_per_snapshot])
+            snapshots = snapshots.reshape(num_channels, self.batch_size, -1)
             snapshots = snapshots.transpose(1, 0)
         else:
             snapshots = snapshot
 
         if len(self.channels_per_snapshot) > 1:
-            snapshots = torch.split(
-                snapshots, self.channels_per_snapshot, dim=1
-            )
+            splits = [i or 1 for i in self.channels_per_snapshot]
+            snapshots = torch.split(snapshots, splits, dim=1)
+
+            it = zip(self.channels_per_snapshot, snapshots)
+            snapshots = [x if i != 0 else x[:, 0] for i, x in it]
         else:
             snapshots = (snapshots,)
 
@@ -68,17 +70,18 @@ def make_streaming_input_model(
 ) -> "Model":
     """Create a snapshotter model and add it to the repository"""
 
-    shapes, snapshot_size, = (
-        [],
-        None,
-    )
+    shapes = []
+    snapshot_size = None
     for x in inputs:
-        if len(x.shape) > 3:
+        if len(x.shape) == 3:
+            shape = x.shape
+        elif len(x.shape) == 2:
+            shape = (x.shape[0], 0, x.shape[1])
+        else:
             raise ValueError(
                 "Can't make streaming input for tensor {} "
                 "with shape {}".format(x.name, x.shape)
             )
-        shape = x.shape if len(x) == 3 else (x.shape[0], 1, x.shape[1])
         shapes.append(shape)
 
         if snapshot_size is not None and shape[-1] != snapshot_size:
@@ -92,20 +95,27 @@ def make_streaming_input_model(
         elif snapshot_size is None:
             snapshot_size = shape[-1]
 
-    channels = [x.shape[1] for x in shapes]
+    update_size = stride_size * batch_size
+    if update_size > snapshot_size:
+        raise ValueError(
+            "Can't use snapshotter with update size {} "
+            "greater than snapshot size {}".format(update_size, snapshot_size)
+        )
+
+    channels = [i[1] for i in shapes]
     snapshot_layer = Snapshotter(
         snapshot_size, stride_size, batch_size, channels
     )
 
-    update_size = stride_size * batch_size
+    num_channels = sum([i or 1 for i in channels])
     return streaming_utils.add_streaming_model(
         repository,
         snapshot_layer,
         name=name or "snapshotter",
         input_name="stream",
-        input_shape=(sum(channels), update_size),
+        input_shape=(num_channels, update_size),
         state_name="snapshot",
-        state_shape=(sum(channels), snapshot_size + update_size),
+        state_shape=(num_channels, snapshot_size),
         output_names=[x.name + "_snapshot" for x in inputs],
         streams_per_gpu=streams_per_gpu,
     )
