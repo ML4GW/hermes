@@ -1,6 +1,10 @@
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 import torch
+
+from hermes.quiver import ModelRepository
 
 
 @pytest.fixture(params=[1, 4, 100])
@@ -18,7 +22,7 @@ def stride_size(request):
     return request.param
 
 
-@pytest.fixture(params=[[1], [4], [1, 4], [1, 2, 4]])
+@pytest.fixture(params=[[1], [4], [1, 4], [1, 2, 4], [1, 0]])
 def channels(request):
     return request.param
 
@@ -35,7 +39,7 @@ def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
     from hermes.quiver.streaming.streaming_input import Snapshotter
 
     snapshotter = Snapshotter(snapshot_size, stride_size, batch_size, channels)
-    num_channels = sum(channels)
+    num_channels = sum([i or 1 for i in channels])
 
     # now run an input through as a new sequence and
     # make sure we get the appropriate number of outputs
@@ -60,7 +64,11 @@ def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
     assert len(outputs) == len(channels)
     offset = stride_size
     for k, (output, channel_dim) in enumerate(zip(outputs, channels)):
-        assert output.shape == (batch_size, channel_dim, snapshot_size)
+        expected = (i for i in (batch_size, channel_dim, snapshot_size) if i)
+        assert output.shape == tuple(expected)
+        if channel_dim == 0:
+            output = output[:, None]
+
         for i, row in enumerate(output):
             for j, channel in enumerate(row):
                 start = j * (snapshot_size + update_size) + i * stride_size
@@ -75,3 +83,84 @@ def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
         stop = start + snapshot_size
         expected = np.arange(start, stop)
         assert (channel == expected).all()
+
+
+@pytest.fixture(scope="function")
+def very_temp_local_repo():
+    repo = ModelRepository("hermes-quiver-test-transient")
+    yield repo
+    repo.delete()
+
+
+@pytest.mark.torch
+@pytest.mark.parametrize("streams_per_gpu", [1, 2])
+def test_make_streaming_input_model(
+    very_temp_local_repo,
+    snapshot_size,
+    stride_size,
+    batch_size,
+    channels,
+    streams_per_gpu,
+):
+    from hermes.quiver.streaming.streaming_input import (
+        make_streaming_input_model,
+    )
+
+    inputs = []
+    names = "abcdefg"[: len(channels)]
+    for channel, name in zip(channels, names):
+        x = MagicMock()
+        x.name = name
+        if channel == 0:
+            x.shape = (batch_size, snapshot_size)
+        else:
+            x.shape = (batch_size, channel, snapshot_size)
+        inputs.append(x)
+
+    update_size = stride_size * batch_size
+    if update_size > snapshot_size:
+        with pytest.raises(ValueError):
+            model = make_streaming_input_model(
+                very_temp_local_repo,
+                inputs,
+                stride_size,
+                batch_size,
+                streams_per_gpu=streams_per_gpu,
+            )
+        return
+
+    model = make_streaming_input_model(
+        very_temp_local_repo,
+        inputs,
+        stride_size,
+        batch_size,
+        streams_per_gpu=streams_per_gpu,
+    )
+    assert model.name == "snapshotter"
+
+    config_path = very_temp_local_repo.fs.join("snapshotter", "config.pbtxt")
+    config = very_temp_local_repo.fs.read_config(config_path)
+
+    num_channels = sum([i or 1 for i in channels])
+    assert len(config.input) == 1
+    assert config.input[0].name == "stream"
+    assert config.input[0].dims == [1, num_channels, update_size]
+
+    assert len(config.output) == len(channels)
+    for channel, name, output in zip(channels, names, config.output):
+        assert output.name == name + "_snapshot"
+
+        expected_shape = [i for i in [batch_size, channel, snapshot_size] if i]
+        assert output.dims == expected_shape
+
+    assert len(config.sequence_batching.state) == 1
+    assert config.sequence_batching.state[0].input_name == "snapshot"
+    assert config.sequence_batching.state[0].output_name == "snapshot"
+    assert config.sequence_batching.state[0].dims == [
+        1,
+        num_channels,
+        snapshot_size,
+    ]
+
+    assert len(config.instance_group) == 1
+    assert config.instance_group[0].count == streams_per_gpu
