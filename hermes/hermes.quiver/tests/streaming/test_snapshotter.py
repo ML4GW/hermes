@@ -1,7 +1,6 @@
-from collections import OrderedDict
-
 import numpy as np
 import pytest
+import torch
 
 
 @pytest.fixture(params=[1, 4, 100])
@@ -9,71 +8,70 @@ def snapshot_size(request):
     return request.param
 
 
-@pytest.fixture
-def channels():
-    return OrderedDict([("a", 6), ("b", 4), ("c", 8)])
+@pytest.fixture(params=[1, 2, 4])
+def batch_size(request):
+    return request.param
+
+
+@pytest.fixture(params=[1, 2, 4])
+def stride_size(request):
+    return request.param
+
+
+@pytest.fixture(params=[[1], [4], [1, 4], [1, 2, 4]])
+def channels(request):
+    return request.param
 
 
 @pytest.fixture
-def snapshotter(snapshot_size, channels):
+def snapshotter(snapshot_size, stride_size, batch_size, channels):
     from hermes.quiver.streaming.streaming_input import Snapshotter
 
-    return Snapshotter(snapshot_size, channels)
+    return Snapshotter(snapshot_size, stride_size, batch_size, channels)
 
 
-@pytest.mark.tensorflow
-@pytest.mark.parametrize("update_size", [1, 10])
-def test_snapshotter(snapshotter, update_size):
-    channel_vals = snapshotter.channels.values()
-    num_channels = sum(channel_vals)
+@pytest.mark.torch
+def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
+    from hermes.quiver.streaming.streaming_input import Snapshotter
 
-    # make sure our shape checks catch any inconsistencies
-    with pytest.raises(ValueError):
-        # channel dimension must equal the total number of input channels
-        x = np.ones((1, num_channels - 1, update_size))
-        snapshotter(x, 1)
-
-    with pytest.raises(ValueError):
-        # can't support batching
-        x = np.ones((2, num_channels, update_size))
-        snapshotter(x, 1)
+    snapshotter = Snapshotter(snapshot_size, stride_size, batch_size, channels)
+    num_channels = sum(channels)
 
     # now run an input through as a new sequence and
     # make sure we get the appropriate number of outputs
     # if our update size is too large, this should raise
     # an error then we're done testing this combination
-    x = np.ones((1, num_channels, update_size))
-    if update_size > snapshotter.snapshot_size:
-        with pytest.raises(ValueError):
-            y = snapshotter(x, 1)
+    update_size = stride_size * batch_size
+    if update_size > snapshot_size:
         return
 
-    y = snapshotter(x, 1)
-    assert len(y) == len(channel_vals)
+    snapshot = torch.arange((snapshot_size + update_size) * num_channels)
+    snapshot = snapshot.reshape(1, num_channels, snapshot_size + update_size)
+    snapshot, update = torch.split(
+        snapshot, [snapshot_size, update_size], dim=-1
+    )
+    snapshot = snapshot.type(torch.float32)
+    update = update.type(torch.float32)
 
-    # now make sure that each snapshot has the appropriate shape
-    # and has 0s everywhere except for the most recent update
-    for y_, channels in zip(y, channel_vals):
-        y_ = y_.numpy()
-        assert y_.shape == (1, channels, snapshotter.snapshot_size)
-        assert (y_[:, :, :-update_size] == 0).all()
-        assert (y_[:, :, -update_size:] == 1).all()
+    outputs = snapshotter(update, snapshot)
+    outputs = [i.cpu().numpy() for i in outputs]
+    new_snapshot = outputs.pop(-1)
 
-    # make another update and verify that the snapshots
-    # all contain the expected update values
-    y = snapshotter(x + 1, 0)
-    for y_ in y:
-        y_ = y_.numpy()
-        assert (y_[:, :, : -update_size * 2] == 0).all()
-        for i in range(2):
-            start = -update_size * (2 - i)
-            stop = (-update_size * (1 - i)) or None
-            assert (y_[:, :, start:stop] == i + 1).all()
+    assert len(outputs) == len(channels)
+    offset = stride_size
+    for k, (output, channel_dim) in enumerate(zip(outputs, channels)):
+        assert output.shape == (batch_size, channel_dim, snapshot_size)
+        for i, row in enumerate(output):
+            for j, channel in enumerate(row):
+                start = j * (snapshot_size + update_size) + i * stride_size
+                stop = start + snapshot_size
+                expected = np.arange(start, stop) + offset
+                assert (channel == expected).all(), (k, i, j)
+        offset += channel_dim * (snapshot_size + update_size)
 
-    # reset the sequence and make sure that the
-    # snapshot resets and updates properly
-    y = snapshotter(x + 2, 1)
-    for y_ in y:
-        y_ = y_.numpy()
-        assert (y_[:, :, :-update_size] == 0).all()
-        assert (y_[:, :, -update_size:] == 3).all()
+    assert new_snapshot.shape == (1, num_channels, snapshot_size)
+    for i, channel in enumerate(new_snapshot[0]):
+        start = update_size + i * (snapshot_size + update_size)
+        stop = start + snapshot_size
+        expected = np.arange(start, stop)
+        assert (channel == expected).all()
