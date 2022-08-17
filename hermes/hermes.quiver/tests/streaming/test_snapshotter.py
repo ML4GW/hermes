@@ -154,8 +154,8 @@ def test_make_streaming_input_model(
         assert output.dims == expected_shape
 
     assert len(config.sequence_batching.state) == 1
-    assert config.sequence_batching.state[0].input_name == "snapshot"
-    assert config.sequence_batching.state[0].output_name == "snapshot"
+    assert config.sequence_batching.state[0].input_name == "input_snapshot"
+    assert config.sequence_batching.state[0].output_name == "output_snapshot"
     assert config.sequence_batching.state[0].dims == [
         1,
         num_channels,
