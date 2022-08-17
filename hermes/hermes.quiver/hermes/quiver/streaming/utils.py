@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Sequence, Tuple
 
 import torch
@@ -23,23 +24,25 @@ def add_streaming_model(
     model = repository.add(name=name, platform=Platform.ONNX, force=True)
     model.export_version(
         streaming_layer,
-        input_shapes={
-            input_name: (1,) + input_shape,
-            state_name: (1,) + state_shape,
-        },
-        output_names=output_names + [state_name],
+        input_shapes=OrderedDict(
+            [
+                (input_name, (1,) + input_shape),
+                ("input_" + state_name, (1,) + state_shape),
+            ]
+        ),
+        output_names=output_names + ["output_" + state_name],
     )
 
     state_input = model.config.input.pop(-1)
     _ = model.config.output.pop(-1)
     state = model_config.ModelSequenceBatching.State(
         dims=state_input.dims,
-        input_name=state_name,
-        output_name=state_name,
+        input_name="input_" + state_name,
+        output_name="output_" + state_name,
         data_type=state_input.data_type,
         initial_state=[
             model_config.ModelSequenceBatching.InitialState(
-                name="zero_snapshot",
+                name=state_name,
                 data_type=state_input.data_type,
                 zero_data=True,
                 dims=state_input.dims,
