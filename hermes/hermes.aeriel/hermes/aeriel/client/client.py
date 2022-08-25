@@ -13,6 +13,7 @@ import random
 import sys
 import time
 from collections import defaultdict
+from copy import deepcopy
 from queue import Empty, Queue
 from typing import (
     TYPE_CHECKING,
@@ -169,6 +170,7 @@ class InferenceClient:
         else:
             self.clock = None
         self.callback_q = Queue()
+        self._sequences = {}
 
     def _build_inputs(
         self, batch_size: int
@@ -436,10 +438,18 @@ class InferenceClient:
                     [i[0].name() for i in self.states]
                 )
             )
+        elif sequence_id is not None and sequence_id not in self._sequences:
+            logging.debug(
+                f"Creating new inputs and states for sequence {sequence_id}"
+            )
+            inputs, states = deepcopy(self.inputs), deepcopy(self.states)
+            self._sequences[sequence_id] = (inputs, states)
+        elif sequence_id is not None:
+            inputs, states = self._sequences[sequence_id]
 
         # if we have any non-stateful inputs, set their
         # input value using the corresponding package
-        for input in self.inputs:
+        for input in inputs:
             name = input.name()
             try:
                 value = x[name]
@@ -456,8 +466,8 @@ class InferenceClient:
         # the updates for each state and set the input
         # message value using those updates. Do checks
         # on the sequence start and end values
-        for state, channel_map in self.states:
-            states = []
+        for state, channel_map in states:
+            state_values = []
 
             # for each update in the state, try to
             # get the update for it and do the checks
@@ -468,15 +478,15 @@ class InferenceClient:
                     raise ValueError(f"Missing state {name}")
 
                 # add the update to our running list of updates
-                states.append(value[None])
+                state_values.append(value[None])
 
             # if we have more than one state, combine them
             # into a single tensor along the channel axis
-            if len(states) > 1:
-                state = np.concatenate(states, axis=1)
+            if len(state_values) > 1:
+                state = np.concatenate(state_values, axis=1)
                 state.set_data_from_numpy(state)
             else:
-                state.set_data_from_numpy(states[0])
+                state.set_data_from_numpy(state_values[0])
 
         # keep track of in-flight times if we're profiling
         if self.clock is not None:
@@ -495,13 +505,15 @@ class InferenceClient:
             self.client.async_stream_infer(
                 self.model_name,
                 model_version=str(self.model_version),
-                inputs=self.inputs + [x[0] for x in self.states],
+                inputs=inputs + [x[0] for x in states],
                 request_id=request_id,
                 sequence_id=sequence_id,
                 sequence_start=sequence_start,
                 sequence_end=sequence_end,
                 timeout=60,
             )
+            if sequence_end:
+                self._sequences.pop(sequence_id)
         else:
             self.client.async_infer(
                 self.model_name,
