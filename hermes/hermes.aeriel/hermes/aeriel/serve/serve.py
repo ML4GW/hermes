@@ -19,9 +19,15 @@ TRITON_BINARY = "/opt/tritonserver/bin/tritonserver"
 
 
 def target(q: Queue, instance: Instance, cmd: str, *args, **kwargs):
-    kwargs["return_result"] = True
-    response = SingularityClient.execute(instance, cmd, *args, **kwargs)
-    q.put(response)
+    try:
+        kwargs["return_result"] = True
+        cmd = ["/bin/bash", "-c", cmd]
+        response = SingularityClient.execute(instance, cmd, *args, **kwargs)
+    except Exception as e:
+        msg = f"Failed to execute server command, encountered error {e}"
+        response = {"return_code": 1, "message": msg}
+    finally:
+        q.put(response)
 
 
 class Timer:
@@ -46,9 +52,8 @@ class Timer:
         return elapsed < self.timeout
 
 
-def get_wait(q: Queue):
+def get_wait(q: Queue, log_file: Optional[str] = None):
     def wait(
-        obj,
         endpoint: str = "localhost:8001",
         timeout: Optional[float] = None,
         log_interval: float = 10,
@@ -61,17 +66,22 @@ def get_wait(q: Queue):
         while timer.tick():
             try:
                 live = client.is_server_live()
-                if live:
-                    break
             except triton.InferenceServerException:
                 pass
             finally:
+                if live:
+                    break
+
                 # the server isn't available yet for some reason
                 try:
                     # check if self._thread has finished executing
                     # and placed the response in the _response_queue.
                     # If so, something has gone wrong
                     response = q.get_nowait()
+                    if log_file is not None and len(response["message"]) == 0:
+                        with open(log_file, "r") as f:
+                            response["message"] = f.read()
+
                     raise ValueError(
                         "Server failed to start with return code "
                         "{return_code} and message:\n{message}".format(
@@ -95,6 +105,7 @@ def get_wait(q: Queue):
 def serve(
     model_repo_dir: str,
     image: str = DEFAULT_IMAGE,
+    name: Optional[str] = None,
     gpus: Optional[Iterable[int]] = None,
     server_args: Optional[Iterable[str]] = None,
     log_file: Optional[str] = None,
@@ -121,14 +132,18 @@ def serve(
             The path to the Singularity image to execute
             Triton inside of. Defaults to the image published
             by Hermes to the Open Science Grid.
+        name:
+            Name to give to the Singularity container instance
+            in which the server will run.
         gpus:
             The gpu indices to expose to Triton via the
             `CUDA_VISIBLE_DEVICES` environment variable. Note
-            that since we use this environment variable, GPU
-            indices need to be set relative to their _global_
-            value, not to the values mapped to by the value of
-            `CUDA_VISIBLE_DEVICES` in the environment from which
-            this function is called.
+            that if the host environment has the `CUDA_VISIBLE_DEVICES`
+            variable set, the passed indices will be assumed to be
+            relative to the GPU ids as specified in that variable.
+            For example, if `CUDA_VISIBLE_DEVICES=4,2,6` on the
+            host environment, then passing `gpus=[1, 2]` will set
+            `CUDA_VISIBLE_DEVICES=2,6` inside the container.
         server_args:
             Additional arguments with which to initialize the
             `tritonserver` executable
@@ -182,31 +197,39 @@ def serve(
                             gpu, len(host_visible_gpus)
                         )
                     )
-                mapped_gpus.append(gpus)
+                mapped_gpus.append(gpu)
             gpus = mapped_gpus
 
         environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpus))
+
+    # spin up a container instance using the specified image
+    instance = SingularityClient.instance(
+         image,
+         name=name,
+         start=True,
+         quiet=False, # if we don't set this, the -s doesn't matter
+         options=["--nv"],
+         singularity_options=["-s"],
+         environ=environ
+    )
 
     # execute the command inside the running container instance.
     # Run it in a separate thread so that we can do work
     # while it runs in this same process
     q = Queue()
-    instance = Instance(image, start=False, quiet=True)
-    runner = Thread(
-        target,
-        q,
-        instance,
-        cmd,
-        nv=True,
-        singularity_options=["-s"],
-        environ=environ,
-    )
+    runner = Thread(target=target, args=(q, instance, cmd))
     runner.start()
-    instance.wait = get_wait(q)
+    instance.wait = get_wait(q, log_file)
     try:
         if wait:
             instance.wait()
         yield instance
     finally:
+        logging.debug(f"Stopping container instance {instance.name}")
         instance.stop()
+
+        logging.debug(f"Waiting for server to shut down")
         runner.join()
+
+        logging.debug(f"Server container instance successfully spun down")
+
