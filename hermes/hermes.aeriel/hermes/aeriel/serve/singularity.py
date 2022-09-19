@@ -101,7 +101,9 @@ class SingularityInstance:
                 )
             )
             command = ["/bin/bash", "-c", command]
-            response = SingularityClient.execute(self._instance, command)
+            response = SingularityClient.execute(
+                self._instance, command, singularity_options=["-s"]
+            )
 
             # check if this is being called from the separate
             # thread so that we can route its response back

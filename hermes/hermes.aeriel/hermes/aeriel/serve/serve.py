@@ -1,9 +1,11 @@
+import os
 import logging
 from contextlib import contextmanager
 from typing import Iterable, Optional
 
 from hermes.aeriel.serve.singularity import SingularityInstance
 
+os.environ["SINGULARITY_MESSAGELEVEL"] = "QUIET"
 DEFAULT_IMAGE = (
     "/cvmfs/singularity.opensciencegrid.org/fastml/gwiaas.tritonserver:latest"
 )
