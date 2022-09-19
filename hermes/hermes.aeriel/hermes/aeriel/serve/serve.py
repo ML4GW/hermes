@@ -1,14 +1,94 @@
-import os
 import logging
+import os
+import time
 from contextlib import contextmanager
+from queue import Empty, Queue
+from threading import Thread
 from typing import Iterable, Optional
 
-from hermes.aeriel.serve.singularity import SingularityInstance
+from spython.instance import Instance
+from spython.main import Client as SingularityClient
+from tritonclient import grpc as triton
 
-os.environ["SINGULARITY_MESSAGELEVEL"] = "QUIET"
 DEFAULT_IMAGE = (
     "/cvmfs/singularity.opensciencegrid.org/fastml/gwiaas.tritonserver:latest"
 )
+
+# TODO: use apps to find this automatically?
+TRITON_BINARY = "/opt/tritonserver/bin/tritonserver"
+
+
+def target(q: Queue, instance: Instance, cmd: str, *args, **kwargs):
+    kwargs["return_result"] = True
+    response = SingularityClient.execute(instance, cmd, *args, **kwargs)
+    q.put(response)
+
+
+class Timer:
+    def __init__(self, timeout: Optional[float], log_interval: float = 10):
+        self.timeout = timeout or float("inf")
+        self.log_interval = log_interval
+        self._start_time = time.time()
+        self._i = 1
+
+    @property
+    def current_interval(self):
+        return self._i * self.log_interval
+
+    def tick(self):
+        elapsed = time.time() - self._start_time
+        if elapsed >= self.current_interval:
+            logging.debug(
+                "Still waiting for server to start, "
+                "{}s elapsed".format(self.current_interval)
+            )
+            self._i += 1
+        return elapsed < self.timeout
+
+
+def get_wait(q: Queue):
+    def wait(
+        obj,
+        endpoint: str = "localhost:8001",
+        timeout: Optional[float] = None,
+        log_interval: float = 10,
+    ) -> None:
+        client = triton.InferenceServerClient(endpoint)
+        logging.info("Waiting for server to come online")
+
+        timer = Timer(timeout, log_interval)
+        live = False
+        while timer.tick():
+            try:
+                live = client.is_server_live()
+                if live:
+                    break
+            except triton.InferenceServerException:
+                pass
+            finally:
+                # the server isn't available yet for some reason
+                try:
+                    # check if self._thread has finished executing
+                    # and placed the response in the _response_queue.
+                    # If so, something has gone wrong
+                    response = q.get_nowait()
+                    raise ValueError(
+                        "Server failed to start with return code "
+                        "{return_code} and message:\n{message}".format(
+                            **response
+                        )
+                    )
+                except Empty:
+                    # otherwise we're still just waiting for the
+                    # server to come online, so keep waiting
+                    continue
+        else:
+            # the loop above never broke, so we must have timed out
+            # TODO: is there a more specific TimeoutError we can call
+            raise RuntimeError(f"Server still not online after {timeout}s")
+        logging.info("Server online")
+
+    return wait
 
 
 @contextmanager
@@ -19,7 +99,7 @@ def serve(
     server_args: Optional[Iterable[str]] = None,
     log_file: Optional[str] = None,
     wait: bool = False,
-) -> None:
+) -> Instance:
     """Context which spins up a Triton container in the background
 
     A context for using Singularity to deploy a local
@@ -65,25 +145,15 @@ def serve(
             fine-grained control over whether to timeout and raise
             an error if Triton takes too long to come online.
     Yields:
-        A `SingularityInstance` object representing the container
-        instance running Triton.
+        A `spyton.instance.Instance` representing the singularity
+            instance running the server, with an additional `wait`
+            method included that will hold up the calling thread
+            until the server is online.
     """
-
-    # start a container instance from the specified image with
-    # the --nv flag set in order to utilize GPUs
-    logging.debug(f"Starting instance of singularity image {image}")
-    instance = SingularityInstance(image)
-
-    # specify GPUs at the front of the command using
-    # CUDA_VISIBLE_DEVICES environment variable
-    cmd = ""
-    if gpus is not None:
-        cmd = "CUDA_VISIBLE_DEVICES=" + ",".join(map(str, gpus)) + " "
 
     # create the base triton server command and
     # point it at the model repository
-    cmd += "/opt/tritonserver/bin/tritonserver "
-    cmd += "--model-repository " + model_repo_dir
+    cmd = f"{TRITON_BINARY} --model-repository {model_repo_dir}"
 
     # add in any additional arguments to the server
     if server_args is not None:
@@ -94,11 +164,49 @@ def serve(
     if log_file is not None:
         cmd += f" > {log_file} 2>&1"
 
+    # add environment variables for the specified GPUs
+    environ = {}
+    if gpus is not None:
+        host_visible_gpus = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+        if host_visible_gpus is not None:
+            host_visible_gpus = host_visible_gpus.split(",")
+
+            mapped_gpus = []
+            for gpu in gpus:
+                try:
+                    gpu = host_visible_gpus[gpu]
+                except IndexError:
+                    raise ValueError(
+                        "GPU index {} too large for host environment "
+                        "with only {} available GPUs".format(
+                            gpu, len(host_visible_gpus)
+                        )
+                    )
+                mapped_gpus.append(gpus)
+            gpus = mapped_gpus
+
+        environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpus))
+
     # execute the command inside the running container instance.
     # Run it in a separate thread so that we can do work
     # while it runs in this same process
-    instance.run(cmd, background=True)
-    with instance:
+    q = Queue()
+    instance = Instance(image, start=False, quiet=True)
+    runner = Thread(
+        target,
+        q,
+        instance,
+        cmd,
+        nv=True,
+        singularity_options=["-s"],
+        environ=environ,
+    )
+    runner.start()
+    instance.wait = get_wait(q)
+    try:
         if wait:
             instance.wait()
         yield instance
+    finally:
+        instance.stop()
+        runner.join()
