@@ -345,6 +345,71 @@ class InferenceClient:
             self.client._stream._request_queue.put(None)
         self.client.__exit__(*exc_args)
 
+    def _validate_inputs(
+        self,
+        x: Union[np.ndarray, Dict[str, np.ndarray]],
+        sequence_id: Optional[int] = None,
+    ):
+        """
+        Normalize an inference input and grab the gRPC
+        InferenceInput objects it will we used to fill
+        with data in a thread-safe fashion.
+        """
+        # if we just passed a single array, make sure we only
+        # have one input or state that we need to pass it to
+        if not isinstance(x, dict):
+            if len(self.inputs) + self.num_states > 1:
+                raise ValueError(
+                    "Only passed a single input array, but "
+                    "model {} has {} inputs and {} states".format(
+                        self.model_name, len(self.inputs), len(self.states)
+                    )
+                )
+            elif len(self.inputs) > 0:
+                # if we only have a non-stateful input, set `x`
+                # up to keep the parsing methods below more standard
+                x = {self.inputs[0].name(): x}
+            else:
+                # same for if we only have a stateful input
+                state_name = list(self.states[0][1].keys())[0]
+                x = {state_name: x}
+
+        # now do some checks on the sequence that this input
+        # belongs to (if any) and grab or create the corresponding
+        # InferenceInputs it will be used to fill with data
+        if sequence_id is None and len(self.states) > 0:
+            # enforce that we provide a sequence id if
+            # there are any stateful inputs. TODO: should
+            # we do the same if there are any stateful outputs?
+            # Or just states somewhere in the model in general?
+            raise ValueError(
+                "Must provide sequence id for model with states {}".format(
+                    [i[0].name() for i in self.states]
+                )
+            )
+        elif sequence_id is not None and self.num_states > 0:
+            raise ValueError(
+                "Specified sequence id {} for request to "
+                "non-stateful model {}".format(sequence_id, self.model_name)
+            )
+        elif sequence_id is not None and sequence_id not in self._sequences:
+            # this is a new sequence, so create a fresh set of inputs for it
+            # to make doing inference across multiple streams thread-safe
+            logging.debug(
+                f"Creating new inputs and states for sequence {sequence_id}"
+            )
+            inputs, states = deepcopy(self.inputs), deepcopy(self.states)
+            self._sequences[sequence_id] = (inputs, states)
+        elif sequence_id is not None:
+            # otherwise this is an existing sequence, so grab
+            # the corresponding inputs and states
+            inputs, states = self._sequences[sequence_id]
+        elif self.num_states == 0:
+            # we're not doing stateful inference, so there's
+            # no sequences to keep track of in the first place
+            inputs, states = self.inputs, None
+        return x, inputs, states, sequence_id
+
     def infer(
         self,
         x: Union[np.ndarray, Dict[str, np.ndarray]],
@@ -404,48 +469,7 @@ class InferenceClient:
                 no stateful inputs.
         """
 
-        # if we just passed a single array, make sure we only
-        # have one input or state that we need to pass it to
-        if not isinstance(x, dict):
-            if len(self.inputs) + self.num_states > 1:
-                raise ValueError(
-                    "Only passed a single input array, but "
-                    "model {} has {} inputs and {} states".format(
-                        self.model_name, len(self.inputs), len(self.states)
-                    )
-                )
-            elif len(self.inputs) > 0:
-                # if we only have a non-stateful input, set `x`
-                # up to keep the parsing methods below more standard
-                x = {self.inputs[0].name(): x}
-            else:
-                # same for if we only have a stateful input
-                state_name = list(self.states[0][1].keys())[0]
-                x = {state_name: x}
-
-        if request_id is None:
-            # if a request_id wasn't specified, give it a random
-            # one that will (probably) be unique
-            request_id = str(random.randint(0, 1e16))
-
-        if sequence_id is None and len(self.states) > 0:
-            # enforce that we provide a sequence id if
-            # there are any stateful inputs. TODO: should
-            # we do the same if there are any stateful outputs?
-            # Or just states somewhere in the model in general?
-            raise ValueError(
-                "Must provide sequence id for model with states {}".format(
-                    [i[0].name() for i in self.states]
-                )
-            )
-        elif sequence_id is not None and sequence_id not in self._sequences:
-            logging.debug(
-                f"Creating new inputs and states for sequence {sequence_id}"
-            )
-            inputs, states = deepcopy(self.inputs), deepcopy(self.states)
-            self._sequences[sequence_id] = (inputs, states)
-        elif sequence_id is not None:
-            inputs, states = self._sequences[sequence_id]
+        x, inputs, states, sequence_id = self._validate_inputs(x, sequence_id)
 
         # if we have any non-stateful inputs, set their
         # input value using the corresponding package
@@ -488,6 +512,11 @@ class InferenceClient:
             else:
                 state.set_data_from_numpy(state_values[0])
 
+        # if a request_id wasn't specified, give it a random
+        # one that will (probably) be unique
+        if request_id is None:
+            request_id = random.randint(0, 1e16)
+
         # keep track of in-flight times if we're profiling
         if self.clock is not None:
             self.clock.tick(request_id, sequence_id)
@@ -497,6 +526,8 @@ class InferenceClient:
         # to the request id so we can parse in the callback
         if sequence_id is not None:
             request_id = f"{request_id}_{sequence_id}"
+        else:
+            request_id = str(request_id)
 
         if len(self.states) > 0:
             # make a streaming inference if we have input states
@@ -512,7 +543,9 @@ class InferenceClient:
                 sequence_end=sequence_end,
                 timeout=60,
             )
+
             if sequence_end:
+                # remove the inputs for this sequence if it's complete
                 self._sequences.pop(sequence_id)
         else:
             self.client.async_infer(
