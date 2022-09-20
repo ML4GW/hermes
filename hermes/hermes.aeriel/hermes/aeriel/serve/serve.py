@@ -204,13 +204,13 @@ def serve(
 
     # spin up a container instance using the specified image
     instance = SingularityClient.instance(
-         image,
-         name=name,
-         start=True,
-         quiet=False, # if we don't set this, the -s doesn't matter
-         options=["--nv"],
-         singularity_options=["-s"],
-         environ=environ
+        image,
+        name=name,
+        start=True,
+        quiet=False,  # if we don't set this, the -s doesn't matter
+        options=["--nv"],
+        singularity_options=["-s"],
+        environ=environ,
     )
 
     # execute the command inside the running container instance.
@@ -228,8 +228,7 @@ def serve(
         logging.debug(f"Stopping container instance {instance.name}")
         instance.stop()
 
-        logging.debug(f"Waiting for server to shut down")
+        logging.debug("Waiting for server to shut down")
         runner.join()
 
-        logging.debug(f"Server container instance successfully spun down")
-
+        logging.debug("Server container instance successfully spun down")
