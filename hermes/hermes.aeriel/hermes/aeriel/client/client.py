@@ -424,7 +424,7 @@ class InferenceClient:
         if request_id is None:
             # if a request_id wasn't specified, give it a random
             # one that will (probably) be unique
-            request_id = random.randint(0, 1e16)
+            request_id = str(random.randint(0, 1e16))
 
         if sequence_id is None and len(self.states) > 0:
             # enforce that we provide a sequence id if
@@ -508,7 +508,7 @@ class InferenceClient:
                 model_version=str(self.model_version),
                 inputs=self.inputs,
                 request_id=request_id,
-                callback=self.callback,
+                callback=self._callback,
                 timeout=60,
             )
 
