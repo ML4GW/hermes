@@ -206,23 +206,16 @@ class InferenceClient:
                 datatype=metadata_input.datatype,
             )
             for step in config.ensemble_scheduling.step:
-                # see if this input corresponds to the input
-                # for a snapshotter model. TODO: come up
-                # with a better way of identifying snapshotter
-                # models than by using the name
-                if (
-                    len(step.input_map) == 1
-                    and list(step.input_map.values())[0] == config_input.name
-                    and step.model_name.startswith("snapshotter")
-                ):
+                # see if this input corresponds to the input for a snapshotter model
+                input_map = list(step.input_map.values())
+                if len(input_map) == 1 and input_map[0] == config_input.name:
+                    model_config = self.client.get_model_config(step.model_name)
+                    model_config = model_config.config
+                    if len(model_config.sequence_batching.state) == 0:
+                        continue
+
                     # only support streaming with batch size 1
                     shape[0] = 1
-
-                    # now read the model config for the snapshotter to
-                    # figure out what the names of its outputs are
-                    snapshotter_config = self.client.get_model_config(
-                        step.model_name
-                    ).config
 
                     # iterate through the outputs of the snapshotter
                     # and figure out how many channels each of its
@@ -230,7 +223,7 @@ class InferenceClient:
                     # mapping from the name of the state to the
                     # number of channels in the state
                     channel_map = {}
-                    for x in snapshotter_config.output:
+                    for x in model_config.output:
                         map_key = step.output_map[x.name]
 
                         # look for the model whose input
@@ -387,7 +380,7 @@ class InferenceClient:
                     [i[0].name() for i in self.states]
                 )
             )
-        elif sequence_id is not None and self.num_states > 0:
+        elif sequence_id is not None and self.num_states == 0:
             raise ValueError(
                 "Specified sequence id {} for request to "
                 "non-stateful model {}".format(sequence_id, self.model_name)
@@ -407,7 +400,7 @@ class InferenceClient:
         elif self.num_states == 0:
             # we're not doing stateful inference, so there's
             # no sequences to keep track of in the first place
-            inputs, states = self.inputs, None
+            inputs, states = self.inputs, []
         return x, inputs, states, sequence_id
 
     def infer(
