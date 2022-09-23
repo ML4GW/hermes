@@ -1,1 +1,1 @@
-from .serve import SingularityInstance, serve
+from .serve import serve
