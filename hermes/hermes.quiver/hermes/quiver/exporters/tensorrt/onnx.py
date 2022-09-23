@@ -129,7 +129,7 @@ def _convert_network(
                     output.name,
                     output.dims,
                     len(network_output.shape),
-                    network_output.shape
+                    network_output.shape,
                 )
             )
 

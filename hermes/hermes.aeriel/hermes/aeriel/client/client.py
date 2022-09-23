@@ -206,10 +206,13 @@ class InferenceClient:
                 datatype=metadata_input.datatype,
             )
             for step in config.ensemble_scheduling.step:
-                # see if this input corresponds to the input for a snapshotter model
+                # see if this input corresponds to
+                # the input for a snapshotter model
                 input_map = list(step.input_map.values())
                 if len(input_map) == 1 and input_map[0] == config_input.name:
-                    model_config = self.client.get_model_config(step.model_name)
+                    model_config = self.client.get_model_config(
+                        step.model_name
+                    )
                     model_config = model_config.config
                     if len(model_config.sequence_batching.state) == 0:
                         continue
