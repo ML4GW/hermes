@@ -33,7 +33,7 @@ class Snapshotter(torch.nn.Module):
 
     def forward(
         self, update: torch.Tensor, snapshot: torch.Tensor
-    ) -> Tuple[torch.tensor, ...]:
+    ) -> Tuple[torch.Tensor, ...]:
         snapshot = snapshot[:, :, self.stride_size :]
         snapshot = torch.cat([snapshot, update], axis=-1)
 
@@ -113,9 +113,9 @@ def make_streaming_input_model(
         snapshot_layer,
         name=name or "snapshotter",
         input_name="stream",
-        input_shape=(num_channels, update_size),
-        state_name="snapshot",
-        state_shape=(num_channels, snapshot_size),
+        input_shape=(1, num_channels, update_size),
+        state_names=["snapshot"],
+        state_shapes=[(1, num_channels, snapshot_size)],
         output_names=[x.name + "_snapshot" for x in inputs],
         streams_per_gpu=streams_per_gpu,
     )
