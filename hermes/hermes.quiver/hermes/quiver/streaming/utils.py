@@ -35,7 +35,6 @@ def add_streaming_model(
 
     states = []
     for state_name in state_names:
-        print(model.config, output_names)
         state_input = model.config.input.pop(1)
         model.config.output.pop(len(output_names))
 
