@@ -123,13 +123,17 @@ def test_inference_client(mock1, mock2, num_inputs, num_states, version):
             if (num_inputs + num_states) == 1:
                 if num_states == 1:
                     x = np.random.randn(*states[0][0].shape)
+                    kwargs = {
+                        "sequence_id": 1001,
+                        "sequence_start": MagicMock(),
+                    }
                 else:
                     x = np.random.randn(1, num_channels, dim)
+                    kwargs = {}
 
-                dummy = MagicMock()
-                client.infer(
-                    x, request_id=10, sequence_id=1001, sequence_start=dummy
-                )
-                postprocessor.assert_called_with(
-                    x.reshape(-1)[-1] + 1, 10, 1001
-                )
+                client.infer(x, request_id=10, **kwargs)
+                x_expected = x.reshape(-1)[-1] + 1
+                if num_states > 0:
+                    postprocessor.assert_called_with(x_expected, 10, 1001)
+                else:
+                    postprocessor.assert_called_with(x_expected, 10, None)
