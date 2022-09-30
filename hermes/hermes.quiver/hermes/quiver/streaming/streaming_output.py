@@ -68,7 +68,7 @@ def make_streaming_output_model(
 ) -> "Model":
     averager = OnlineAverager(update_size, batch_size, num_updates)
     input_batch, kernel_size = input.shape
-    if input_batch > 0 and input_batch != batch_size:
+    if input_batch is not None and input_batch != batch_size:
         raise ValueError(
             "Can't create streaming output model with batch size "
             "of {} from input model with fixed batch size {}".format(
