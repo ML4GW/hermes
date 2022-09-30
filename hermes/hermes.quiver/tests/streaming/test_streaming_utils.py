@@ -1,13 +1,15 @@
 import pytest
 
 
-@pytest.mark.tensorflow
-def test_utils(temp_local_repo, tf):
+@pytest.mark.torch
+def test_utils(temp_local_repo):
+    import torch
+
     from hermes.quiver.streaming import utils
 
-    class DummyLayer(tf.keras.layers.Layer):
-        def call(self, x, sequence_start):
-            return x + (1 * sequence_start)
+    class DummyLayer(torch.nn.Module):
+        def forward(self, x, state):
+            return x + state, state + 1
 
     model = utils.add_streaming_model(
         temp_local_repo,
@@ -15,6 +17,9 @@ def test_utils(temp_local_repo, tf):
         name="dummy",
         input_name="dummy_input",
         input_shape=(4, 10),
+        state_names=["dummy_state"],
+        state_shapes=[(4, 10)],
+        output_names=["dummy_output"],
         streams_per_gpu=2,
     )
 
@@ -28,10 +33,15 @@ def test_utils(temp_local_repo, tf):
 
     assert len(config.input) == 1
     assert config.input[0].name == "dummy_input"
-    assert config.input[0].dims == [1, 4, 10]
+    assert config.input[0].dims == [4, 10]
 
-    assert config.sequence_batching.direct is not None
-    assert len(config.sequence_batching.control_input) == 1
-    assert config.sequence_batching.control_input[0].name == "sequence_start"
+    assert len(config.sequence_batching.state) == 1
+    assert config.sequence_batching.state[0].input_name == "input_dummy_state"
+    assert config.sequence_batching.state[0].output_name == (
+        "output_dummy_state"
+    )
+    assert config.sequence_batching.state[0].dims == [4, 10]
 
-    assert config.instance_group[0].count == 2
+    assert len(config.output) == 1
+    assert config.output[0].name == "dummy_output"
+    assert config.output[0].dims == [4, 10]

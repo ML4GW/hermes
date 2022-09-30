@@ -10,7 +10,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
-tritonclient = {extras = ["all"], version = "^2.18"}
+tritonclient = {extras = ["all"], version = "^2.22"}
 protobuf = "^3.17"
 requests = "^2.26.0"
 
@@ -55,7 +55,7 @@ name = "ngc"
 url = "https://pypi.ngc.nvidia.com"
 
 [build-system]
-requires = ["poetry>=1.20a2"]
+requires = ["poetry>=1.2.0a2"]
 build-backend = "poetry.masonry.api"
 
 [tool.pytest.ini_options]

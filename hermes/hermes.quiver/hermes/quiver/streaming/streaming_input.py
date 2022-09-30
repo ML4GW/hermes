@@ -1,7 +1,6 @@
-from collections import OrderedDict
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple
 
-import tensorflow as tf
+import torch
 
 from hermes.quiver.streaming import utils as streaming_utils
 
@@ -10,117 +9,113 @@ if TYPE_CHECKING:
     from hermes.quiver.model import ExposedTensor
 
 
-@tf.keras.utils.register_keras_serializable(name="Snapshotter")
-class Snapshotter(tf.keras.layers.Layer):
-    """Layer for capturing snapshots of streaming time series
-
-    Args:
-        snapshot_size:
-            The size of the snapshot to be updated
-        channels:
-            An ordered dictionary mapping the names of models
-            with snapshots to be updated to the number of
-            channels in each model
-    """
-
+class Snapshotter(torch.nn.Module):
     def __init__(
         self,
         snapshot_size: int,
-        channels: OrderedDict,
-        **kwargs,
+        stride_size: int,
+        batch_size: int,
+        channels_per_snapshot: Sequence[int],
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__()
+
         self.snapshot_size = snapshot_size
-        self.channels = channels
+        self.stride_size = stride_size
+        self.batch_size = batch_size
+        self.channels_per_snapshot = list(channels_per_snapshot)
 
-    def build(self, input_shape) -> None:
-        num_channels = sum(self.channels.values())
-        if input_shape[0] is None:
-            raise ValueError("Must specify batch dimension")
-        if input_shape[0] != 1:
-            # TODO: support batching
-            raise ValueError("Batching not currently supported")
-        if num_channels != input_shape[1]:
-            raise ValueError(
-                "Number of channels specified {} doesn't "
-                "match number of channels found {}".format(
-                    num_channels, input_shape[1]
-                )
+        if batch_size > 1:
+            self.unfold = torch.nn.Unfold(
+                (1, batch_size), dilation=(1, stride_size)
             )
-        if input_shape[-1] > self.snapshot_size:
-            raise ValueError(
-                "Update size {} cannot be larger than snapshot size {}".format(
-                    input_shape[-1], self.snapshot_size
-                )
-            )
+        else:
+            self.unfold = None
 
-        # snapshot state is maintained like a model
-        # weight might be, since this creates a TF
-        # Variable which can be assigned to
-        self.snapshot = self.add_weight(
-            name="snapshot",
-            shape=(input_shape[0], input_shape[1], self.snapshot_size),
-            dtype=tf.float32,
-            initializer="zeros",
-            trainable=False,
-        )
-        self.update_size = input_shape[2]
+    def forward(
+        self, update: torch.Tensor, snapshot: torch.Tensor
+    ) -> Tuple[torch.Tensor, ...]:
+        snapshot = snapshot[:, :, self.stride_size :]
+        snapshot = torch.cat([snapshot, update], axis=-1)
 
-    def call(self, stream, sequence_start):
-        # grab the non-stale part of the existing snapshot
-        # multiply it by 0 if the sequence has been restarted
-        old = (1.0 - sequence_start) * self.snapshot[:, :, self.update_size :]
+        if self.batch_size > 1:
+            snapshots = snapshot[:, :, None]
+            snapshots = self.unfold(snapshots)
 
-        # create a new snapshot using the update and
-        # assign it to the variable
-        update = tf.concat([old, stream], axis=2)
-        self.snapshot.assign(update)
+            num_channels = sum([i or 1 for i in self.channels_per_snapshot])
+            snapshots = snapshots.reshape(num_channels, self.batch_size, -1)
+            snapshots = snapshots.transpose(1, 0)
+        else:
+            snapshots = snapshot
 
-        # split the updated snapshot into the various
-        # channels required for each model
-        return tf.split(update, list(self.channels.values()), axis=1)
+        if len(self.channels_per_snapshot) > 1:
+            splits = [i or 1 for i in self.channels_per_snapshot]
+            snapshots = torch.split(snapshots, splits, dim=1)
 
-    def compute_output_shape(self, input_shapes):
-        return [
-            tf.TensorShape([input_shapes[0][0], i, self.snapshot_size])
-            for i in self.channels.values()
-        ]
+            it = zip(self.channels_per_snapshot, snapshots)
+            snapshots = [x if i != 0 else x[:, 0] for i, x in it]
+        else:
+            snapshots = (snapshots,)
 
-    def get_config(self):
-        config = {
-            "snapshot_size": self.snapshot_size,
-            "channels": self.channels,
-        }
-
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        snapshot = snapshot[:, :, -self.snapshot_size :]
+        return tuple(snapshots) + (snapshot,)
 
 
 def make_streaming_input_model(
     repository: "ModelRepository",
     inputs: Sequence["ExposedTensor"],
-    stream_size: int,
+    stride_size: int,
+    batch_size: int = 1,
     name: Optional[str] = None,
     streams_per_gpu: int = 1,
 ) -> "Model":
     """Create a snapshotter model and add it to the repository"""
 
-    if len(inputs) > 1 and not all(
-        [x.shape[-1] == inputs[0].shape[-1] for x in inputs]
-    ):
+    shapes = []
+    snapshot_size = None
+    for x in inputs:
+        if len(x.shape) == 3:
+            shape = x.shape
+        elif len(x.shape) == 2:
+            shape = (x.shape[0], 0, x.shape[1])
+        else:
+            raise ValueError(
+                "Can't make streaming input for tensor {} "
+                "with shape {}".format(x.name, x.shape)
+            )
+        shapes.append(shape)
+
+        if snapshot_size is not None and shape[-1] != snapshot_size:
+            raise ValueError(
+                "Input for tensor {} has last dimension {} "
+                "which doesn't match expected last dimension {} "
+                "from tensor {}".format(
+                    x.name, shape[-1], snapshot_size, inputs[0].name
+                )
+            )
+        elif snapshot_size is None:
+            snapshot_size = shape[-1]
+
+    update_size = stride_size * batch_size
+    if update_size > snapshot_size:
         raise ValueError(
-            "Cannot create streaming inputs for inputs "
-            "with shapes {}".format([x.shape[-1] for x in inputs])
+            "Can't use snapshotter with update size {} "
+            "greater than snapshot size {}".format(update_size, snapshot_size)
         )
 
-    # TODO: support 2D streaming
-    channels = OrderedDict([(x.model.name, x.shape[1]) for x in inputs])
-    snapshot_layer = Snapshotter(inputs[0].shape[-1], channels)
+    channels = [i[1] for i in shapes]
+    snapshot_layer = Snapshotter(
+        snapshot_size, stride_size, batch_size, channels
+    )
+
+    num_channels = sum([i or 1 for i in channels])
     return streaming_utils.add_streaming_model(
         repository,
         snapshot_layer,
         name=name or "snapshotter",
         input_name="stream",
-        input_shape=(sum(channels.values()), stream_size),
+        input_shape=(1, num_channels, update_size),
+        state_names=["snapshot"],
+        state_shapes=[(1, num_channels, snapshot_size)],
+        output_names=[f"{x.model.name}.{x.name}_snapshot" for x in inputs],
         streams_per_gpu=streams_per_gpu,
     )

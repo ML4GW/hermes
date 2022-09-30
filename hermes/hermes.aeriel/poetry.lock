@@ -412,7 +412,7 @@ serve = ["spython"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "50d533fb0d950a7b9878cee0c55cc568c93dd375ebcee69ff7110f17506a2cab"
+content-hash = "d371054de3c9ae22c90e5c3d065aeaef6595e3a82b31c26eeac48850d1c03bba"
 
 [metadata.files]
 aiohttp = [

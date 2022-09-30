@@ -312,7 +312,7 @@ class ServerMonitor(PipelineProcess):
             result = wait(fs, return_when=FIRST_EXCEPTION)
 
             # check to see if any of them stopped due to an exception
-            list(result.done[0]).exception()
+            list(result.done)[0].exception()
         except Exception as e:
             self.cleanup(e)
             exitcode = 1

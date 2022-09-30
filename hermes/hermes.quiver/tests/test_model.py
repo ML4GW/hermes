@@ -87,7 +87,6 @@ def test_ensemble_model(temp_local_repo, torch_model):
     assert ensemble.outputs["y"].shape == (None, 10)
 
 
-@pytest.mark.tensorflow
 @pytest.mark.torch
 def test_ensemble_streaming_input(temp_local_repo, torch_model):
     model1 = temp_local_repo.add("model-1", platform=Platform.ONNX, force=True)
@@ -114,7 +113,6 @@ def test_ensemble_streaming_input(temp_local_repo, torch_model):
     assert list(ensemble.config.input[0].dims) == [1, 9, 2]
 
 
-@pytest.mark.tensorflow
 @pytest.mark.torch
 @pytest.mark.parametrize("channel_dim", [None, 1, 5])
 @pytest.mark.parametrize("num_updates", [1, 2, 4])
@@ -136,12 +134,15 @@ def test_ensemble_streaming_output(
 
     ensemble = Model("ensemble", temp_local_repo, platform=Platform.ENSEMBLE)
     if (num_updates * update_size) > torch_model.size:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as exc_info:
             ensemble.add_streaming_output(
-                model.outputs["y"], update_size, num_updates
+                model.outputs["y"], update_size, num_updates, batch_size=1
             )
+        assert str(exc_info.value).startswith("Not enough data")
         return
 
-    ensemble.add_streaming_output(model.outputs["y"], update_size, num_updates)
-    assert ensemble.config.output[0].name.startswith("aggregator")
+    ensemble.add_streaming_output(
+        model.outputs["y"], update_size, num_updates, batch_size=1
+    )
+    assert ensemble.config.output[0].name.startswith("stream")
     assert ensemble.config.output[0].dims == output_shape

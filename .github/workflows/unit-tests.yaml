@@ -22,7 +22,8 @@ jobs:
           aeriel: 'hermes/hermes.aeriel/**'
           cloudbreak: 'hermes/hermes.cloudbreak/**'
           quiver: 'hermes/hermes.quiver/**'
-          stillwater: 'hermes/hermes.stillwater/**'
+
+#           stillwater: 'hermes/hermes.stillwater/**'
 
   test:
     runs-on: ubuntu-latest
@@ -31,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.8', '3.9', '3.10']
-        poetry-version: [1.2.0a2, 1.2.0b2]
+        poetry-version: ['1.2.0a2', '1.2.0b2']
         library: ${{ fromJSON(needs.changes.outputs.libraries) }}
     steps:
     - uses: actions/checkout@v2

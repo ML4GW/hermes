@@ -1,7 +1,6 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
-import numpy as np
-import tensorflow as tf
+import torch
 
 from hermes.quiver.streaming import utils as streaming_utils
 
@@ -10,84 +9,64 @@ if TYPE_CHECKING:
     from hermes.quiver.model import ExposedTensor
 
 
-@tf.keras.utils.register_keras_serializable(name="Aggregator")
-class Aggregator(tf.keras.layers.Layer):
+class OnlineAverager(torch.nn.Module):
     def __init__(
-        self, update_size: int, num_updates: int, *args, **kwargs
+        self,
+        update_size: int,
+        batch_size: int,
+        num_updates: int,
+        num_channels: Optional[int] = None,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.update_size = update_size
         self.num_updates = num_updates
+        self.batch_size = batch_size
         self.snapshot_size = update_size * num_updates
 
-    def build(self, input_shape) -> None:
-        if input_shape[0] is None:
-            raise ValueError("Must specify batch dimension")
-        if input_shape[0] != 1:
-            # TODO: support batching
-            raise ValueError("Batching not currently supported")
-        if input_shape[-1] < self.snapshot_size:
-            raise ValueError(
-                "Expected input update of at least {} samples, but "
-                "found {}".format(self.snapshot_size, input_shape[-1])
-            )
+        normalizer = torch.arange(num_updates) + 1
+        normalizer = normalizer.flip(-1)
+        normalizer = torch.repeat_interleave(normalizer, update_size)
 
-        self.update_idx = self.add_weight(
-            name="update_idx", shape=[], dtype=tf.float32, initializer="zeros"
+        self.register_buffer("normalizer", normalizer)
+        self.register_buffer("zero", torch.zeros((1,)))
+
+        pad_shape = (update_size * batch_size,)
+        if num_channels is not None:
+            pad_shape = (num_channels,) + pad_shape
+        pad = torch.zeros(pad_shape)
+        self.register_buffer("pad", pad)
+
+    def forward(
+        self,
+        update: torch.Tensor,
+        snapshot: torch.Tensor,
+        update_idx: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        for i in range(self.batch_size):
+            if update.ndim > 2:
+                x = update[i, :, -self.snapshot_size :]
+            else:
+                x = update[i, -self.snapshot_size :]
+
+            weights = self.normalizer.clamp(self.zero, update_idx + i + 1)
+            start = i * self.update_size
+            stop = start + x.shape[-1]
+
+            if update.ndim > 2:
+                prev = snapshot[:, start:stop]
+                snapshot[:, start:stop] += (x - prev) / weights
+            else:
+                prev = snapshot[start:stop]
+                snapshot[start:stop] += (x - prev) / weights
+
+        output_size = self.update_size * self.batch_size
+        snapshot_size = snapshot.shape[-1] - output_size
+        output, snapshot = torch.split(
+            snapshot, [output_size, snapshot_size], dim=-1
         )
 
-        snapshot_shape = [
-            input_shape[0],
-            self.snapshot_size - self.update_size,
-        ]
-        if len(input_shape) == 3:
-            snapshot_shape.insert(1, input_shape[1])
-        elif len(input_shape) > 3:
-            raise ValueError(
-                "Unsupported number of input dimensions {}".format(
-                    len(input_shape)
-                )
-            )
-
-        self.snapshot = self.add_weight(
-            name="snapshot",
-            shape=snapshot_shape,
-            dtype=tf.float32,
-            initializer="zeros",
-        )
-
-        update_shape = [input_shape[0], self.update_size]
-        if len(input_shape) == 3:
-            update_shape.insert(1, input_shape[1])
-
-        self.update = tf.zeros(update_shape, dtype=tf.float32)
-        self.normalizer = tf.constant(
-            np.repeat(np.arange(self.num_updates), self.update_size)[::-1] + 1,
-            dtype=tf.float32,
-        )
-
-    def call(self, x, sequence_start):
-        snapshot = (1.0 - sequence_start) * self.snapshot
-        update_idx = (1.0 - sequence_start) * self.update_idx + 1
-
-        if len(x.shape) == 3:
-            x = x[:, :, -self.snapshot_size :]
-        else:
-            x = x[:, -self.snapshot_size :]
-
-        snapshot = tf.concat([snapshot, self.update], axis=-1)
-        weights = tf.clip_by_value(self.normalizer, 0, update_idx)
-        snapshot += (x - snapshot) / weights
-
-        output, snapshot = tf.split(
-            snapshot,
-            [self.update_size, self.update_size * (self.num_updates - 1)],
-            axis=-1,
-        )
-
-        self.snapshot.assign(snapshot)
-        self.update_idx.assign(update_idx[0])
-        return output
+        snapshot = torch.concat([snapshot, self.pad], axis=-1)
+        return output[None], snapshot, update_idx + self.batch_size
 
 
 def make_streaming_output_model(
@@ -95,15 +74,61 @@ def make_streaming_output_model(
     input: "ExposedTensor",
     update_size: int,
     num_updates: int,
+    batch_size: Optional[int] = None,
     name: Optional[str] = None,
     streams_per_gpu: int = 1,
 ) -> "Model":
-    aggregator_layer = Aggregator(update_size, num_updates)
+    if len(input.shape) == 3:
+        input_batch, num_channels, kernel_size = input.shape
+    elif len(input.shape) == 2:
+        input_batch, kernel_size = input.shape
+        num_channels = None
+    else:
+        raise ValueError(
+            "Can't produce streaming output state for "
+            "tensor with {} dimensions".format(len(input.shape))
+        )
+
+    if (num_updates * update_size) > kernel_size:
+        raise ValueError(
+            "Not enough data for {} updates of length {} "
+            "in kernel of length {}".format(
+                num_updates, update_size, kernel_size
+            )
+        )
+
+    if batch_size is None and input_batch is None:
+        raise ValueError(
+            "Must specify batch size for streaming output "
+            "model if corresponding input batch size is variable."
+        )
+    elif batch_size is None:
+        batch_size = input_batch
+    elif input_batch is not None and input_batch != batch_size:
+        raise ValueError(
+            "Can't create streaming output model with batch size "
+            "of {} from input model with fixed batch size {}".format(
+                batch_size, input_batch
+            )
+        )
+
+    averager = OnlineAverager(
+        update_size, batch_size, num_updates, num_channels
+    )
+
+    snapshot_size = update_size * (batch_size + num_updates)
+    snapshot_shape = (snapshot_size,)
+    if num_channels is not None:
+        snapshot_shape = (num_channels,) + snapshot_shape
+
     return streaming_utils.add_streaming_model(
         repository,
-        aggregator_layer,
+        averager,
         name=name or "aggregator",
         input_name="update",
-        input_shape=input.shape[1:],
+        input_shape=(batch_size,) + input.shape[1:],
+        state_names=["online_average", "update_index"],
+        state_shapes=[snapshot_shape, (1,)],
+        output_names=["stream"],
         streams_per_gpu=streams_per_gpu,
     )

@@ -275,6 +275,7 @@ class EnsembleModel(Model):
         self,
         inputs: Union[Sequence[ExposedTensor], ExposedTensor],
         stream_size: int,
+        batch_size: int = 1,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
@@ -292,10 +293,10 @@ class EnsembleModel(Model):
         try:
             from hermes.quiver.streaming import make_streaming_input_model
         except ImportError as e:
-            if "tensorflow" in str(e):
+            if "torch" in str(e):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
-                    "must install TensorFlow first"
+                    "must install PyTorch first"
                 )
             raise
 
@@ -303,7 +304,12 @@ class EnsembleModel(Model):
         # and set up its config with the correct
         # instance group
         streaming_model = make_streaming_input_model(
-            self.repository, inputs, stream_size, name, streams_per_gpu
+            self.repository,
+            inputs,
+            stream_size,
+            batch_size,
+            name,
+            streams_per_gpu,
         )
 
         # add the streaming model's input as an input
@@ -332,6 +338,7 @@ class EnsembleModel(Model):
         output: ExposedTensor,
         update_size: int,
         num_updates: int,
+        batch_size: Optional[int] = None,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
@@ -344,10 +351,10 @@ class EnsembleModel(Model):
         try:
             from hermes.quiver.streaming import make_streaming_output_model
         except ImportError as e:
-            if "tensorflow" in str(e):
+            if "torch" in str(e):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
-                    "must install TensorFlow first"
+                    "must install PyTorch first"
                 )
             raise
 
@@ -356,6 +363,7 @@ class EnsembleModel(Model):
             output,
             update_size=update_size,
             num_updates=num_updates,
+            batch_size=batch_size,
             name=name,
             streams_per_gpu=streams_per_gpu,
         )
