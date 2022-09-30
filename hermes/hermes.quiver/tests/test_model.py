@@ -87,7 +87,6 @@ def test_ensemble_model(temp_local_repo, torch_model):
     assert ensemble.outputs["y"].shape == (None, 10)
 
 
-@pytest.mark.tensorflow
 @pytest.mark.torch
 def test_ensemble_streaming_input(temp_local_repo, torch_model):
     model1 = temp_local_repo.add("model-1", platform=Platform.ONNX, force=True)
@@ -114,7 +113,6 @@ def test_ensemble_streaming_input(temp_local_repo, torch_model):
     assert list(ensemble.config.input[0].dims) == [1, 9, 2]
 
 
-@pytest.mark.tensorflow
 @pytest.mark.torch
 @pytest.mark.parametrize("channel_dim", [None, 1, 5])
 @pytest.mark.parametrize("num_updates", [1, 2, 4])
