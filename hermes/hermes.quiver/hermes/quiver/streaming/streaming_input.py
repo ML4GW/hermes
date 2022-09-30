@@ -116,6 +116,6 @@ def make_streaming_input_model(
         input_shape=(1, num_channels, update_size),
         state_names=["snapshot"],
         state_shapes=[(1, num_channels, snapshot_size)],
-        output_names=[x.name + "_snapshot" for x in inputs],
+        output_names=[f"{x.model.name}.{x.name}_snapshot" for x in inputs],
         streams_per_gpu=streams_per_gpu,
     )

@@ -112,6 +112,7 @@ def test_make_streaming_input_model(
     for channel, name in zip(channels, names):
         x = MagicMock()
         x.name = name
+        x.model.name = "my-model"
         if channel == 0:
             x.shape = (batch_size, snapshot_size)
         else:
@@ -149,7 +150,7 @@ def test_make_streaming_input_model(
 
     assert len(config.output) == len(channels)
     for channel, name, output in zip(channels, names, config.output):
-        assert output.name == name + "_snapshot"
+        assert output.name == f"my-model.{name}_snapshot"
 
         expected_shape = [i for i in [batch_size, channel, snapshot_size] if i]
         assert output.dims == expected_shape

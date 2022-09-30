@@ -275,7 +275,7 @@ class EnsembleModel(Model):
         self,
         inputs: Union[Sequence[ExposedTensor], ExposedTensor],
         stream_size: int,
-        batch_size: int,
+        batch_size: int = 1,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
@@ -296,7 +296,7 @@ class EnsembleModel(Model):
             if "torch" in str(e):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
-                    "must install Torch first"
+                    "must install PyTorch first"
                 )
             raise
 
@@ -338,6 +338,7 @@ class EnsembleModel(Model):
         output: ExposedTensor,
         update_size: int,
         num_updates: int,
+        batch_size: int = 1,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
@@ -350,10 +351,10 @@ class EnsembleModel(Model):
         try:
             from hermes.quiver.streaming import make_streaming_output_model
         except ImportError as e:
-            if "tensorflow" in str(e):
+            if "torch" in str(e):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
-                    "must install TensorFlow first"
+                    "must install PyTorch first"
                 )
             raise
 
@@ -362,6 +363,7 @@ class EnsembleModel(Model):
             output,
             update_size=update_size,
             num_updates=num_updates,
+            batch_size=batch_size,
             name=name,
             streams_per_gpu=streams_per_gpu,
         )
