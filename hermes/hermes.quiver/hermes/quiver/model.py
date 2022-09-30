@@ -338,7 +338,7 @@ class EnsembleModel(Model):
         output: ExposedTensor,
         update_size: int,
         num_updates: int,
-        batch_size: int = 1,
+        batch_size: Optional[int] = None,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:

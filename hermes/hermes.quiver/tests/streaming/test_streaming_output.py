@@ -18,18 +18,26 @@ def num_updates(request):
     return request.param
 
 
+@pytest.fixture(params=[None, 2])
+def num_channels(request):
+    return request.param
+
+
 @pytest.mark.torch
 @pytest.fixture
-def averager(batch_size, update_size, num_updates):
+def averager(batch_size, update_size, num_updates, num_channels):
     from hermes.quiver.streaming.streaming_output import OnlineAverager
 
     return OnlineAverager(
-        update_size=update_size, batch_size=batch_size, num_updates=num_updates
+        update_size=update_size,
+        batch_size=batch_size,
+        num_updates=num_updates,
+        num_channels=num_channels,
     )
 
 
 @pytest.mark.torch
-def test_online_averager(averager):
+def test_online_averager(averager, num_channels):
     import torch
 
     num_updates = averager.num_updates
@@ -44,9 +52,16 @@ def test_online_averager(averager):
         x, (1, 2 * batch_size), dilation=(1, update_size)
     )[0]
 
+    if num_channels is not None:
+        x = x.view(2 * batch_size, 1, -1)
+        x = torch.repeat_interleave(x, num_channels, axis=1)
+
     # initialize a blank initial snapshot
     snapshot_size = update_size * (batch_size + num_updates)
-    snapshot = torch.zeros((snapshot_size,))
+    snapshot_shape = (snapshot_size,)
+    if num_channels is not None:
+        snapshot_shape = (num_channels,) + snapshot_shape
+    snapshot = torch.zeros(snapshot_shape)
 
     # initialize an update index
     update_idx = torch.zeros((1,))
@@ -57,7 +72,10 @@ def test_online_averager(averager):
     )
 
     # make sure the shapes are right
-    assert stream.shape == (1, update_size * batch_size)
+    expected_shape = (update_size * batch_size,)
+    if num_channels is not None:
+        expected_shape = (num_channels,) + expected_shape
+    assert stream.shape == (1,) + expected_shape
     assert new_snapshot.shape == snapshot.shape
     assert update_idx.item() == batch_size
 
@@ -66,46 +84,74 @@ def test_online_averager(averager):
     start -= update_size * batch_size
     stop = start + update_size * batch_size
     expected = torch.arange(start, stop)
-    assert (stream[0] == expected).all().item()
+    if num_channels is None:
+        assert (stream[0] == expected).all().item()
+    else:
+        for i in range(num_channels):
+            assert (stream[0, i] == expected).all().item()
 
     # finally check that the snapshot values are as expected
     filled = (num_updates - 1) * update_size
     expected = torch.arange(stop, stop + filled)
-    assert (new_snapshot[:filled] == expected).all().item()
-    assert (new_snapshot[filled:] == 0).all().item()
+
+    if num_channels is None:
+        assert (new_snapshot[:filled] == expected).all().item()
+        assert (new_snapshot[filled:] == 0).all().item()
+    else:
+        for i in range(num_channels):
+            assert (new_snapshot[i, :filled] == expected).all().item()
+            assert (new_snapshot[i, filled:] == 0).all().item()
 
     # now take the next step and confirm everything again
     stream, newer_snapshot, update_idx = averager(
         x[batch_size:], new_snapshot, update_idx
     )
-    assert stream.shape == (1, update_size * batch_size)
+
+    assert stream.shape == (1,) + expected_shape
     assert new_snapshot.shape == snapshot.shape
     assert update_idx.item() == 2 * batch_size
 
     start = size - update_size * (num_updates + batch_size - 1)
     stop = start + update_size * batch_size
     expected = torch.arange(start, stop)
-    assert (stream[0] == expected).all().item()
+    if num_channels is None:
+        assert (stream[0] == expected).all().item()
+    else:
+        for i in range(num_channels):
+            assert (stream[0, i] == expected).all().item()
 
     expected = torch.arange(stop, stop + filled)
-    assert (newer_snapshot[:filled] == expected).all().item()
-    assert (newer_snapshot[filled:] == 0).all().item()
+    if num_channels is None:
+        assert (newer_snapshot[:filled] == expected).all().item()
+        assert (newer_snapshot[filled:] == 0).all().item()
+    else:
+        for i in range(num_channels):
+            assert (newer_snapshot[i, :filled] == expected).all().item()
+            assert (newer_snapshot[i, filled:] == 0).all().item()
+
+
+@pytest.fixture(params=[None, 1, 2, 4])
+def batch_size_with_None(request):
+    return request.param
 
 
 @pytest.mark.torch
 def test_make_streaming_output_model(
-    update_size, batch_size, num_updates, temp_local_repo
+    update_size, batch_size_with_None, num_updates, temp_local_repo
 ):
     from hermes.quiver.streaming.streaming_output import (
         make_streaming_output_model,
     )
 
+    batch_size = batch_size_with_None
     input = MagicMock()
-    input.shape = (batch_size, 128)
+    input.shape = (batch_size or 8, 128)
 
     model = make_streaming_output_model(
-        temp_local_repo, input, update_size, batch_size, num_updates
+        temp_local_repo, input, update_size, num_updates, batch_size=batch_size
     )
+
+    batch_size = batch_size or 8
 
     assert len(model.config.input) == 1
     assert model.config.input[0].name == "update"
@@ -133,3 +179,19 @@ def test_make_streaming_output_model(
         "output_update_index"
     )
     assert model.config.sequence_batching.state[1].dims == [1]
+
+    input.shape = (None, 128)
+    with pytest.raises(ValueError):
+        make_streaming_output_model(
+            temp_local_repo, input, update_size, num_updates, batch_size=None
+        )
+
+    input.shape = (batch_size - 1, 128)
+    with pytest.raises(ValueError):
+        make_streaming_output_model(
+            temp_local_repo,
+            input,
+            update_size,
+            num_updates,
+            batch_size=batch_size,
+        )
