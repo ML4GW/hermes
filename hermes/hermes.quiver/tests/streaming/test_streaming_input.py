@@ -2,7 +2,6 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-import torch
 
 from hermes.quiver import ModelRepository
 
@@ -36,6 +35,8 @@ def snapshotter(snapshot_size, stride_size, batch_size, channels):
 
 @pytest.mark.torch
 def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
+    import torch
+
     from hermes.quiver.streaming.streaming_input import Snapshotter
 
     snapshotter = Snapshotter(snapshot_size, stride_size, batch_size, channels)
