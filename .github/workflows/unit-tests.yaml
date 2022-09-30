@@ -22,7 +22,8 @@ jobs:
           aeriel: 'hermes/hermes.aeriel/**'
           cloudbreak: 'hermes/hermes.cloudbreak/**'
           quiver: 'hermes/hermes.quiver/**'
-          stillwater: 'hermes/hermes.stillwater/**'
+
+#           stillwater: 'hermes/hermes.stillwater/**'
 
   test:
     runs-on: ubuntu-latest
