@@ -35,8 +35,8 @@ def add_streaming_model(
 
     states = []
     for state_name in state_names:
-        state_input = model.config.input.pop(-1)
-        model.config.output.pop(-1)
+        state_input = model.config.input.pop(1)
+        model.config.output.pop(1)
 
         state = model_config.ModelSequenceBatching.State(
             dims=state_input.dims,

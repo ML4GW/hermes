@@ -17,11 +17,20 @@ class OnlineAverager(torch.nn.Module):
         self.update_size = update_size
         self.num_updates = num_updates
         self.batch_size = batch_size
-        self.snapshot_size = update_size * batch_size * num_updates
+        self.snapshot_size = update_size * num_updates
 
-        normalizer = torch.arange(num_updates * batch_size)
-        normalizer = normalizer.repeat(update_size)
+        normalizer = torch.arange(num_updates) + 1
+        normalizer = normalizer.flip(-1)
+        normalizer = torch.repeat_interleave(normalizer, update_size)
+
         self.register_buffer("normalizer", normalizer)
+        self.register_buffer("zero", torch.zeros((1,)))
+        self.register_buffer(
+            "pad",
+            torch.zeros(
+                update_size * batch_size,
+            ),
+        )
 
     def forward(
         self,
@@ -29,14 +38,14 @@ class OnlineAverager(torch.nn.Module):
         snapshot: torch.Tensor,
         update_idx: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        weights = self.normalizer.clamp(0, update_idx + 1)
         for i in range(self.batch_size):
-            start = i * self.update_size
-            stop = start + update.shape[-1]
+            x = update[i, -self.snapshot_size :]
+            weights = self.normalizer.clamp(self.zero, update_idx + i + 1)
 
-            x = update[i]
-            weights = self.normalizer[start:stop]
-            snapshot[start:stop] += (x - snapshot[start:stop]) / weights
+            start = i * self.update_size
+            stop = start + x.shape[-1]
+            prev = snapshot[start:stop]
+            snapshot[start:stop] += (x - prev) / weights
 
         output_size = self.update_size * self.batch_size
         snapshot_size = snapshot.shape[-1] - output_size
@@ -44,8 +53,8 @@ class OnlineAverager(torch.nn.Module):
             snapshot, [output_size, snapshot_size], dim=-1
         )
 
-        snapshot = torch.nn.functional.pad(snapshot, (0, output_size))
-        return output[None], snapshot, update_idx + 1
+        snapshot = torch.concat([snapshot, self.pad])
+        return output[None], snapshot, update_idx + self.batch_size
 
 
 def make_streaming_output_model(
@@ -67,7 +76,7 @@ def make_streaming_output_model(
             )
         )
 
-    snapshot_size = update_size * batch_size * num_updates + kernel_size
+    snapshot_size = update_size * (batch_size + num_updates)
     return streaming_utils.add_streaming_model(
         repository,
         averager,
