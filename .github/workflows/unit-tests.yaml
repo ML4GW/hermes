@@ -23,9 +23,15 @@ jobs:
       id: filter
       with:
         filters: |
-          aeriel: 'hermes/hermes.aeriel/**'
-          cloudbreak: 'hermes/hermes.cloudbreak/**'
-          quiver: 'hermes/hermes.quiver/**'
+          aeriel:
+          - '.github/workflows/unit-tests.yaml'
+          - 'hermes/hermes.aeriel/**'
+          cloudbreak:
+          - '.github/workflows/unit-tests.yaml'
+          - 'hermes/hermes.cloudbreak/**'
+          quiver:
+          - '.github/workflows/unit-tests.yaml'
+          - 'hermes/hermes.quiver/**'
 
 #           stillwater: 'hermes/hermes.stillwater/**'
 
