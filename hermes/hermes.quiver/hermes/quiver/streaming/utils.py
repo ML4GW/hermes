@@ -36,7 +36,7 @@ def add_streaming_model(
     states = []
     for state_name in state_names:
         state_input = model.config.input.pop(1)
-        model.config.output.pop(1)
+        model.config.output.pop(len(output_names))
 
         state = model_config.ModelSequenceBatching.State(
             dims=state_input.dims,
@@ -59,6 +59,7 @@ def add_streaming_model(
         direct=model_config.ModelSequenceBatching.StrategyDirect(),
         state=states,
     )
+
     model.config.sequence_batching.MergeFrom(sequence_batching)
     model.config.add_instance_group(count=streams_per_gpu)
     model.config.write()
