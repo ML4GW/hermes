@@ -158,7 +158,7 @@ def test_make_streaming_output_model(
     assert model.config.input[0].dims == [batch_size, 128]
 
     assert len(model.config.output) == 1
-    assert model.config.output[0].name == "stream"
+    assert model.config.output[0].name == "output_stream"
     assert model.config.output[0].dims == [1, update_size * batch_size]
 
     assert len(model.config.sequence_batching.state) == 2
