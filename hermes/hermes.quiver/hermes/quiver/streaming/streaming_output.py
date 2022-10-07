@@ -116,7 +116,7 @@ def make_streaming_output_model(
         update_size, batch_size, num_updates, num_channels
     )
 
-    snapshot_size = update_size * (batch_size + num_updates)
+    snapshot_size = update_size * (num_updates + batch_size - 1)
     snapshot_shape = (snapshot_size,)
     if num_channels is not None:
         snapshot_shape = (num_channels,) + snapshot_shape
