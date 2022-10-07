@@ -109,7 +109,7 @@ def test_ensemble_streaming_input(temp_local_repo, torch_model):
         stream_size=2,
     )
 
-    assert ensemble.config.input[0].name == "stream"
+    assert ensemble.config.input[0].name == "snapshot_update"
     assert list(ensemble.config.input[0].dims) == [1, 9, 2]
 
 
@@ -144,5 +144,5 @@ def test_ensemble_streaming_output(
     ensemble.add_streaming_output(
         model.outputs["y"], update_size, num_updates, batch_size=1
     )
-    assert ensemble.config.output[0].name.startswith("stream")
+    assert ensemble.config.output[0].name.startswith("output_stream")
     assert ensemble.config.output[0].dims == output_shape

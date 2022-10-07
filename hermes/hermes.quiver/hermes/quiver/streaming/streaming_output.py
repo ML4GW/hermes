@@ -116,7 +116,7 @@ def make_streaming_output_model(
         update_size, batch_size, num_updates, num_channels
     )
 
-    snapshot_size = update_size * (batch_size + num_updates)
+    snapshot_size = update_size * (num_updates + batch_size - 1)
     snapshot_shape = (snapshot_size,)
     if num_channels is not None:
         snapshot_shape = (num_channels,) + snapshot_shape
@@ -129,6 +129,6 @@ def make_streaming_output_model(
         input_shape=(batch_size,) + input.shape[1:],
         state_names=["online_average", "update_index"],
         state_shapes=[snapshot_shape, (1,)],
-        output_names=["stream"],
+        output_names=["output_stream"],
         streams_per_gpu=streams_per_gpu,
     )

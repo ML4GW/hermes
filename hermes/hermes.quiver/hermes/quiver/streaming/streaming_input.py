@@ -112,7 +112,7 @@ def make_streaming_input_model(
         repository,
         snapshot_layer,
         name=name or "snapshotter",
-        input_name="stream",
+        input_name="snapshot_update",
         input_shape=(1, num_channels, update_size),
         state_names=["snapshot"],
         state_shapes=[(1, num_channels, snapshot_size)],

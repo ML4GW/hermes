@@ -3,6 +3,40 @@ from unittest.mock import MagicMock
 import pytest
 
 
+@pytest.mark.torch
+def test_online_averager_simple():
+    import torch
+
+    from hermes.quiver.streaming.streaming_output import OnlineAverager
+
+    x = torch.arange(8).view(1, -1).repeat(4, 1).type(torch.float32) + 1
+    snapshot = torch.zeros((11,))
+    update_idx = torch.zeros((1,))
+
+    averager = OnlineAverager(
+        update_size=1, batch_size=4, num_updates=8, num_channels=None
+    )
+
+    y, snapshot, update_idx = averager(x, snapshot, update_idx)
+    assert (y == torch.tensor([1, 1.5, 2, 2.5])).all().item()
+
+    expected_snapshot = [3.5, 4.5, 5.5, 6.5, 7, 7.5, 8, 0, 0, 0, 0]
+    assert (snapshot == torch.tensor(expected_snapshot)).all().item()
+    assert update_idx.item() == 4
+
+    y, snapshot, update_idx = averager(x, snapshot, update_idx)
+    assert (y == torch.tensor([3, 3.5, 4, 4.5])).all().item()
+
+    expected_snapshot = [5, 5.5, 6, 6.5, 7, 7.5, 8, 0, 0, 0, 0]
+    assert (snapshot == torch.tensor(expected_snapshot)).all().item()
+    assert update_idx.item() == 8
+
+    y, snapshot, update_idx = averager(x, snapshot, update_idx)
+    assert (y == 4.5).all().item()
+    assert (snapshot == torch.tensor(expected_snapshot)).all().item()
+    assert update_idx.item() == 12
+
+
 @pytest.fixture(params=[1, 2, 4])
 def batch_size(request):
     return request.param
@@ -57,7 +91,7 @@ def test_online_averager(averager, num_channels):
         x = torch.repeat_interleave(x, num_channels, axis=1)
 
     # initialize a blank initial snapshot
-    snapshot_size = update_size * (batch_size + num_updates)
+    snapshot_size = update_size * (batch_size + num_updates - 1)
     snapshot_shape = (snapshot_size,)
     if num_channels is not None:
         snapshot_shape = (num_channels,) + snapshot_shape
@@ -158,7 +192,7 @@ def test_make_streaming_output_model(
     assert model.config.input[0].dims == [batch_size, 128]
 
     assert len(model.config.output) == 1
-    assert model.config.output[0].name == "stream"
+    assert model.config.output[0].name == "output_stream"
     assert model.config.output[0].dims == [1, update_size * batch_size]
 
     assert len(model.config.sequence_batching.state) == 2
@@ -169,7 +203,7 @@ def test_make_streaming_output_model(
         "output_online_average"
     )
     assert model.config.sequence_batching.state[0].dims == [
-        update_size * (batch_size + num_updates)
+        update_size * (batch_size + num_updates - 1)
     ]
 
     assert model.config.sequence_batching.state[1].input_name == (

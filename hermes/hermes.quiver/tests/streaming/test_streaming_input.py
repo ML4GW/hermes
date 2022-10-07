@@ -145,7 +145,7 @@ def test_make_streaming_input_model(
 
     num_channels = sum([i or 1 for i in channels])
     assert len(config.input) == 1
-    assert config.input[0].name == "stream"
+    assert config.input[0].name == "snapshot_update"
     assert config.input[0].dims == [1, num_channels, update_size]
 
     assert len(config.output) == len(channels)

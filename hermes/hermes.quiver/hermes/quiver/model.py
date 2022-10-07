@@ -315,7 +315,8 @@ class EnsembleModel(Model):
         # add the streaming model's input as an input
         # to this ensemble model.
         # TODO: should we include some sort of optional key
-        streaming_input = self.add_input(streaming_model.inputs["stream"])
+        update = streaming_model.inputs["snapshot_update"]
+        streaming_input = self.add_input(update)
 
         # pipe the output of this streaming model to
         # each one of the corresponding inputs. Include
