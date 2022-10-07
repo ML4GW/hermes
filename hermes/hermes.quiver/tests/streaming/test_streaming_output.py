@@ -6,6 +6,7 @@ import pytest
 @pytest.mark.torch
 def test_online_averager_simple():
     import torch
+
     from hermes.quiver.streaming.streaming_output import OnlineAverager
 
     x = torch.arange(8).view(1, -1).repeat(4, 1).type(torch.float32) + 1
@@ -13,10 +14,7 @@ def test_online_averager_simple():
     update_idx = torch.zeros((1,))
 
     averager = OnlineAverager(
-        update_size=1,
-        batch_size=4,
-        num_updates=8,
-        num_channels=None
+        update_size=1, batch_size=4, num_updates=8, num_channels=None
     )
 
     y, snapshot, update_idx = averager(x, snapshot, update_idx)
@@ -37,7 +35,7 @@ def test_online_averager_simple():
     assert (y == 4.5).all().item()
     assert (snapshot == torch.tensor(expected_snapshot)).all().item()
     assert update_idx.item() == 12
- 
+
 
 @pytest.fixture(params=[1, 2, 4])
 def batch_size(request):
