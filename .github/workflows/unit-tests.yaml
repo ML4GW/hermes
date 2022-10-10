@@ -32,8 +32,9 @@ jobs:
           quiver:
           - '.github/workflows/unit-tests.yaml'
           - 'hermes/hermes.quiver/**'
-
-#           stillwater: 'hermes/hermes.stillwater/**'
+          stillwater:
+          - '.github/workflows/unit-tests.yaml'
+          - 'hermes/hermes.stillwater/**'
 
   test:
     runs-on: ubuntu-latest
