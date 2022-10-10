@@ -26,14 +26,16 @@ jobs:
           aeriel:
           - '.github/workflows/unit-tests.yaml'
           - 'hermes/hermes.aeriel/**'
-          cloudbreak:
-          - '.github/workflows/unit-tests.yaml'
-          - 'hermes/hermes.cloudbreak/**'
           quiver:
           - '.github/workflows/unit-tests.yaml'
           - 'hermes/hermes.quiver/**'
+          stillwater:
+          - '.github/workflows/unit-tests.yaml'
+          - 'hermes/hermes.stillwater/**'
 
-#           stillwater: 'hermes/hermes.stillwater/**'
+      # cloudbreak:
+      # - '.github/workflows/unit-tests.yaml'
+      # - 'hermes/hermes.cloudbreak/**'
 
   test:
     runs-on: ubuntu-latest
