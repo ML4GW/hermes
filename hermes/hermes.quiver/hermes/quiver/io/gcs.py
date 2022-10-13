@@ -204,3 +204,6 @@ class GCSFileSystem(FileSystem):
             )
 
         blob.upload_from_string(obj, content_type=content_type)
+
+    def __str__(self):
+        return f"gs://{self.bucket}/{self.root}"

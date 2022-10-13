@@ -5,6 +5,7 @@ import pytest
 
 from hermes.quiver import ModelRepository
 from hermes.quiver.io import GCSFileSystem, LocalFileSystem
+from hermes.quiver.io.exceptions import NoFilesFoundError
 
 
 @pytest.fixture(
@@ -22,7 +23,11 @@ def fs(request):
 def temp_fs(fs):
     filesystem = fs("hermes-quiver-test")
     yield filesystem
-    filesystem.delete()
+
+    try:
+        filesystem.delete()
+    except NoFilesFoundError:
+        pass
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +61,6 @@ def keras_model(dim, tf):
     import tensorflow as tf
 
     scope = "".join(random.choices("abcdefghijk", k=10))
-
     model = tf.keras.Sequential(
         [
             tf.keras.layers.Dense(

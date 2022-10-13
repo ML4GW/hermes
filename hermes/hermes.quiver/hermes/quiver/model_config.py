@@ -26,7 +26,7 @@ def _add_exposed_tensor(f):
         obj: "ModelConfig",
         name: str,
         shape: "SHAPE_TYPE",
-        dtype: str = Literal["float32", "int64"],
+        dtype: Literal["float32", "int64"] = "float32",
         **kwargs,  # including kwargs for reshaping later or something
     ) -> output_type:
         """Add an {exposed} tensor to the config

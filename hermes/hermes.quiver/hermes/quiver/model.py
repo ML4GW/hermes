@@ -75,6 +75,12 @@ class Model:
 
     def __post_init__(self):
         self.fs.soft_makedirs(self.name)
+
+        # TODO: should we write config on initialization
+        # so that repos can be reinitialized even if a
+        # model hasn't exported a version yet? Or do we
+        # want to enforce that written configs be useable
+        # by Triton
         self.config = ModelConfig(self)
 
     @property

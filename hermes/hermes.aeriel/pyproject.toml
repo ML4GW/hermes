@@ -13,7 +13,7 @@ python = ">=3.8,<3.11"
 tritonclient = {extras = ["all"], version = "^2.22"}
 
 numpy = {version = "^1.22", optional = true}
-spython = {version = "^0.1", optional = true}
+spython = {version = "^0.2", optional = true}
 
 [tool.poetry.extras]
 client = ["numpy"]

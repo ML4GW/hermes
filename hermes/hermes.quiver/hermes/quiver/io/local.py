@@ -2,6 +2,7 @@ import glob
 import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 from hermes.quiver.io.exceptions import NoFilesFoundError
@@ -14,6 +15,12 @@ if TYPE_CHECKING:
 @dataclass
 class LocalFileSystem(FileSystem):
     def __post_init__(self):
+        # TODO: switch to preferring Path as root
+        # and using pathlib apis instead of os.
+        if not isinstance(self.root, Path):
+            self.root = Path(self.root)
+        self.root = str(self.root.resolve())
+
         self.soft_makedirs("")
 
     def soft_makedirs(self, path: str):
@@ -90,3 +97,6 @@ class LocalFileSystem(FileSystem):
 
         with open(path, mode) as f:
             f.write(obj)
+
+    def __str__(self):
+        return self.root

@@ -281,6 +281,7 @@ class ServerMonitor(PipelineProcess):
                 if lines:
                     with lock:
                         f.write("\n" + "\n".join(lines))
+                        f.flush()
                 time.sleep(1 / self.max_request_rate)
         except Exception as e:
             self.logger.error(f"Encountered error in parsing ip {ip}:\n {e}")
