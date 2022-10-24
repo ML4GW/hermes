@@ -1311,14 +1311,14 @@ testing = ["coverage (>=5.0.3)", "zope-event", "zope-testing"]
 
 [extras]
 gcs = ["google-cloud-storage"]
-tensorflow = ["tensorflow", "libclang"]
+tensorflow = ["tensorflow"]
 tensorrt = ["nvidia-tensorrt"]
-torch = ["torch", "urllib3"]
+torch = ["torch"]
 
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "8875fbb508f1c7d4d605d829a9b3c7f63094fed28853a7518583d772c55666ed"
+content-hash = "80cb181cfaa674a60b070f23f626a74857cfd9d087aa75597291ab1c1a4d87c8"
 
 [metadata.files]
 absl-py = [
