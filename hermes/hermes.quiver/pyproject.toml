@@ -15,20 +15,9 @@ protobuf = "^3.17"
 requests = "^2.26.0"
 
 # optional dependencies
-# tensorlfow optional dependencies
 tensorflow = {version = "^2.3", optional = true}
-
-# torch optional dependencies
 torch = {version = "^1.7", optional = true}
-# for some reason this is missing in the `requests`
-# install in the torch environment, so add it as
-# an optional dependency just for that extra
-# urllib3 = { version = "^1.26", optional = true }
-
-# gcs filesystem backend optional dependencies
 google-cloud-storage = {version = "^1.38", optional = true }
-
-# tensorrt export platform optional dependencies
 nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
 
 [tool.poetry.extras]
