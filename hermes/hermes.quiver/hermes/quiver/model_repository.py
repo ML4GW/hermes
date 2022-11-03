@@ -48,7 +48,11 @@ class ModelRepository:
             self.fs = io.LocalFileSystem(root)
 
         if clean:
-            self.fs.remove("*")
+            # remove raises NoFilesFoundError if the directory is empty
+            try:
+                self.fs.remove("*")
+            except NoFilesFoundError:
+                pass
         self.refresh()
 
     def refresh(self) -> None:
