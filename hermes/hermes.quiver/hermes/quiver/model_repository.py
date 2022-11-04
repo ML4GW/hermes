@@ -52,7 +52,6 @@ class ModelRepository:
             # remove raises NoFilesFoundError if the directory is empty
             try:
                 self.fs.remove("*")
-
             except NoFilesFoundError:
                 pass
         self.refresh()
