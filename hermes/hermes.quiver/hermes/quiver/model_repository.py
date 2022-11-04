@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Union
 
 from hermes.quiver import Model, Platform, io
+from hermes.quiver.io.exceptions import NoFilesFoundError
 
 
 class ModelRepository:
@@ -48,7 +49,11 @@ class ModelRepository:
             self.fs = io.LocalFileSystem(root)
 
         if clean:
-            self.fs.remove("*")
+            # remove raises NoFilesFoundError if the directory is empty
+            try:
+                self.fs.remove("*")
+            except NoFilesFoundError:
+                pass
         self.refresh()
 
     def refresh(self) -> None:

@@ -5,7 +5,11 @@ from hermes.quiver.io import LocalFileSystem
 
 
 def test_model_repository(temp_fs):
-    repo = ModelRepository(str(temp_fs))
+    # make sure clean functionality works with no models
+    repo = ModelRepository(str(temp_fs), clean=True)
+    assert len(repo.models) == 0
+
+    repo = ModelRepository(str(temp_fs), clean=False)
     assert len(repo.models) == 0
 
     model = repo.add("test-model", platform=Platform.ONNX)
@@ -50,7 +54,7 @@ def test_model_repository(temp_fs):
     repo = ModelRepository(str(temp_fs))
     assert len(repo.models) == 1
 
-    # now make sure the clean functionality works
+    # now make sure the clean functionality works with a model in the repo
     repo = ModelRepository(str(temp_fs), clean=True)
     assert len(repo.models) == len(temp_fs.list("")) == 0
 
