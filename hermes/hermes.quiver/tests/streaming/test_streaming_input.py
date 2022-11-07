@@ -39,24 +39,25 @@ def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
 
     from hermes.quiver.streaming.streaming_input import Snapshotter
 
+    if stride_size >= snapshot_size:
+        with pytest.raises(ValueError):
+            snapshotter = Snapshotter(
+                snapshot_size, stride_size, batch_size, channels
+            )
+        return
+
     snapshotter = Snapshotter(snapshot_size, stride_size, batch_size, channels)
     num_channels = sum([i or 1 for i in channels])
 
     # now run an input through as a new sequence and
     # make sure we get the appropriate number of outputs
-    # if our update size is too large, this should raise
-    # an error then we're done testing this combination
     update_size = stride_size * batch_size
-    if update_size > snapshot_size:
-        return
-
     snapshot = torch.arange((snapshot_size + update_size) * num_channels)
+    snapshot = snapshot.type(torch.float32)
     snapshot = snapshot.reshape(1, num_channels, snapshot_size + update_size)
     snapshot, update = torch.split(
         snapshot, [snapshot_size, update_size], dim=-1
     )
-    snapshot = snapshot.type(torch.float32)
-    update = update.type(torch.float32)
 
     outputs = snapshotter(update, snapshot)
     outputs = [i.cpu().numpy() for i in outputs]
@@ -120,7 +121,7 @@ def test_make_streaming_input_model(
         inputs.append(x)
 
     update_size = stride_size * batch_size
-    if update_size > snapshot_size:
+    if stride_size >= snapshot_size:
         with pytest.raises(ValueError):
             model = make_streaming_input_model(
                 very_temp_local_repo,
