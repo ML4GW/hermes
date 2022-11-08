@@ -18,6 +18,13 @@ class Snapshotter(torch.nn.Module):
         channels_per_snapshot: Sequence[int],
     ) -> None:
         super().__init__()
+        if stride_size >= snapshot_size:
+            raise ValueError(
+                "Snapshotter can't accommodate stride {} "
+                "which is greater than snapshot size {}".format(
+                    stride_size, snapshot_size
+                )
+            )
 
         self.snapshot_size = snapshot_size
         self.stride_size = stride_size
@@ -96,12 +103,6 @@ def make_streaming_input_model(
             snapshot_size = shape[-1]
 
     update_size = stride_size * batch_size
-    if update_size > snapshot_size:
-        raise ValueError(
-            "Can't use snapshotter with update size {} "
-            "greater than snapshot size {}".format(update_size, snapshot_size)
-        )
-
     channels = [i[1] for i in shapes]
     snapshot_layer = Snapshotter(
         snapshot_size, stride_size, batch_size, channels
