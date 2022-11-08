@@ -59,24 +59,10 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
         def do_conversion(model_binary, config):
             # merge info about inputs and outputs from
             # the existing config into our config
-            # do this in a few steps to be safe:
-            # create a copy of this model's config (which
-            # may or may not have info about inputs/outputs)
-            # TODO: do we just need to merge in inputs/outputs?
-            # can we use this with _check_exposed_tensors?
-            temp_config = deepcopy(self.config._config)
-
-            # merge in the config from the model
-            # we're converting from
-            temp_config.MergeFrom(config)
-
-            # then merge back in our config so that
-            # things like platform, max_batch_size, etc.
-            # are preserved.
-            temp_config.MergeFrom(self.config._config)
-
-            # now set our config to this copy's value
-            self.config._config = temp_config
+            inputs = {i.name: tuple(i.dims) for i in config.input}
+            outputs = {i.name: tuple(i.dims) for i in config.output}
+            self._check_exposed_tensors("input", inputs)
+            self._check_exposed_tensors("output", outputs)
 
             if endpoint is None:
                 # do the conversion locally
