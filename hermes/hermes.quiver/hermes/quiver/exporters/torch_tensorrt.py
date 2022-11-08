@@ -1,5 +1,4 @@
 import pickle
-from copy import deepcopy
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 
@@ -40,6 +39,37 @@ class TorchTensorRTMeta(TorchOnnxMeta):
 
 
 class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
+    def convert_local(self, model_binary: bytes, use_fp16: bool) -> bytes:
+        # do the conversion locally
+        trt_binary = convert_network(
+            model_binary, self.config._config, use_fp16
+        )
+
+        # CUDA engine build won't raise an error on failure
+        # but will return None instead, so raise error here
+        if trt_binary is None:
+            raise RuntimeError("Model conversion failed, consult TRT logs")
+        return bytes(trt_binary)
+
+    def convert_remote(
+        self, model_binary: bytes, use_fp16: bool, endpoint: str
+    ) -> bytes:
+        # use a remote conversion service to convert
+        # the onnx binary to a tensorrt one
+        data = {
+            "config": self.config._config.SerializeToString(),
+            "network": model_binary,
+            "use_fp16": use_fp16,
+        }
+        response = requests.post(
+            url=endpoint,
+            data=pickle.dumps(data),
+            headers={"Content-Type": "application/octet-stream"},
+        )
+
+        response.raise_for_status()
+        return response.content
+
     def __call__(
         self,
         model_fn: Union[Callable, "Model"],
@@ -65,33 +95,11 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             self._check_exposed_tensors("output", outputs)
 
             if endpoint is None:
-                # do the conversion locally
-                trt_binary = convert_network(
-                    model_binary, self.config._config, use_fp16
-                )
-
-                # CUDA engine build won't raise an error on failure
-                # but will return None instead, so raise error here
-                if trt_binary is None:
-                    raise RuntimeError(
-                        "Model conversion failed, consult TRT logs"
-                    )
-                trt_binary = bytes(trt_binary)
+                trt_binary = self.convert_local(model_binary, use_fp16)
             else:
-                # use a remote conversion service to convert
-                # the onnx binary to a tensorrt one
-                data = {
-                    "config": self.config._config.SerializeToString(),
-                    "network": model_fn,
-                }
-                response = requests.post(
-                    url=endpoint,
-                    data=pickle.dumps(data),
-                    headers={"Content-Type": "application/octet-stream"},
+                trt_binary = self.convert_remote(
+                    model_binary, use_fp16, endpoint
                 )
-
-                response.raise_for_status()
-                trt_binary = response.content
 
             # write the binary file to the appropriate location
             export_path = self.fs.join(
@@ -104,13 +112,25 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             # if we didn't pass a model, then create a dummy
             # temporary model repository to build the ONNX
             # binary that we'll convert and do export with that
-            # TODO: I guess we don't need this if we already
-            # have that info in the config
-            if input_shapes is None:
+
+            # infer shapes and names if we didn't pass them explicitly
+            if input_shapes is None and len(self.config.input) == 0:
                 raise ValueError(
                     "Must specify input shapes if passing "
                     "a torch model for export directly"
                 )
+            elif input_shapes is None:
+                input_shapes = {
+                    i.name: list(i.dims) for i in self.config.input
+                }
+
+            if output_names is None and len(self.config.output) == 0:
+                raise ValueError(
+                    "Must specify output names if passing "
+                    "a torch model for export directly"
+                )
+            elif output_names is None:
+                output_names = [i.name for i in self.config.output]
 
             # use temporary directory as context so
             # that it will delete no matter what happens
@@ -140,4 +160,4 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
             with open(onnx_path, "rb") as f:
                 model_binary = f.read()
 
-            return do_conversion(model_binary, model.config._config)
+            return do_conversion(model_binary, model_fn.config._config)

@@ -109,7 +109,15 @@ class ModelConfig:
             config = model.fs.read_config(
                 model.fs.join(model.name, "config.pbtxt")
             )
-
+        except FileNotFoundError:
+            # create a new config if one doesn't
+            # already exist
+            config = model_config.ModelConfig(
+                name=model.name,
+                platform=model.platform.value,
+                **kwargs,
+            )
+        else:
             # ensure that the name in the config
             # matches the name passed from the model
             if config.name != model.name:
@@ -133,15 +141,6 @@ class ModelConfig:
             # their existing value in the config
             kwargs_config = model_config.ModelConfig(**kwargs)
             config.MergeFrom(kwargs_config)
-
-        except FileNotFoundError:
-            # create a new config if one doesn't
-            # already exist
-            config = model_config.ModelConfig(
-                name=model.name,
-                platform=model.platform.value,
-                **kwargs,
-            )
 
         # add it as an attribute
         self._config = config
@@ -253,6 +252,16 @@ class ModelConfig:
 
     def __str__(self):
         return str(self._config)
+
+    def __copy__(self):
+        obj = ModelConfig(self.model)
+        obj._config = self._config.__copy__()
+        return obj
+
+    def __deepcopy__(self, memo=None):
+        obj = ModelConfig(self.model)
+        obj._config = self._config.__deepcopy__(memo)
+        return obj
 
 
 class EnsembleConfig(ModelConfig):
