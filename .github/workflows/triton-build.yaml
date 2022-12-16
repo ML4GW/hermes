@@ -1,0 +1,54 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches:
+    - main
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  main:
+    if: github.repository_owner == 'ML4GW'
+    strategy:
+      fail-fast: false
+      matrix:
+        trt-version: ["8.2.3", "8.4.1"]
+        include:
+        - trt-version: 8.2.3
+          triton-tag: 22.02-py3
+        - trt-version: 8.4.1
+          triton-tag: 22.07-py3
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v2
+
+    -
+      uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        filters: .github/workflows/triton-build.yaml
+
+    -
+      name: Log in to container registry
+      uses: docker/login-action@master
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    -
+      name: Triton Server pull-push
+      id: gw-iaas-server-container-push
+      env:
+        BASE: nvcr.io/nvidia/tritonserver:${{ matrix.triton-tag }}-py3
+        TAG: ${{ env.REGISTRY }}/ml4gw/hermes/tritonserver:${{ matrix.triton-tag }}
+      run: |
+        echo "FROM ${{ env.BASE }}" | \
+            docker build \
+              --label tensorrt_version=${{ matrix.trt-verion }} \
+              -t ${{ env.TAG }} \
+              -
+        docker push ${{ env.TAG }}
