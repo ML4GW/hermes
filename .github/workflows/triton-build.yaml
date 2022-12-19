@@ -63,8 +63,8 @@ jobs:
       run: |
         docker build \
             -f .github/triton.Dockerfile \
-            --build-arg TRITON_TAG=${{ matrix.triton_tag }} \
-            --build-arg TENSORRT_VERSION=${{ matrix.tensorrt_version }} \
+            --build-arg TRITON_TAG=${{ matrix.triton-tag }} \
+            --build-arg TENSORRT_VERSION=${{ matrix.trt-version }} \
             -t ${{ env.TAG }} \
             .github/
         docker push ${{ env.TAG }}
