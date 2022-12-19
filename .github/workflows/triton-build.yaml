@@ -18,9 +18,9 @@ jobs:
         trt-version: ["8.2.3", "8.4.1"]
         include:
         - trt-version: 8.2.3
-          triton-tag: 22.02-py3
+          triton-tag: 22.02
         - trt-version: 8.4.1
-          triton-tag: 22.07-py3
+          triton-tag: 22.07
     steps:
     -
       name: Checkout
@@ -30,7 +30,9 @@ jobs:
       uses: dorny/paths-filter@v2
       id: filter
       with:
-        filters: .github/workflows/triton-build.yaml
+        filters: |
+          .github/triton.Dockerfile
+          .github/workflows/triton-build.yaml
 
     -
       name: Log in to container registry
@@ -44,12 +46,12 @@ jobs:
       name: Triton Server pull-push
       id: gw-iaas-server-container-push
       env:
-        BASE: nvcr.io/nvidia/tritonserver:${{ matrix.triton-tag }}-py3
         TAG: ${{ env.REGISTRY }}/ml4gw/hermes/tritonserver:${{ matrix.triton-tag }}
       run: |
-        echo "FROM ${{ env.BASE }}" | \
-            docker build \
-              --label tensorrt_version=${{ matrix.trt-verion }} \
-              -t ${{ env.TAG }} \
-              -
+        docker build \
+            -f .github/triton.Dockerfile \
+            --build-arg TRITON_TAG=${{ matrix.triton_tag }} \
+            --build-arg TENSORRT_VERSION=${{ matrix.tensorrt_version }} \
+            -t ${{ env.TAG }} \
+            .github/
         docker push ${{ env.TAG }}
