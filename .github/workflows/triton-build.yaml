@@ -1,4 +1,4 @@
-name: Build and publish Docker image
+name: Pull triton images to local repo
 
 on:
   push:
@@ -9,9 +9,28 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  main:
+  # only run this workflow if changes have been
+  # made to the triton Dockerfile or to this workflow,
+  # which contain all the info that we need
+  changes:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'ML4GW'
+    outputs:
+      triton: ${{ steps.filter.outputs.triton }}
+    steps:
+    -
+      uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        filters: |
+          triton:
+          - '.github/triton.Dockerfile'
+          - '.github/workflows/triton-build.yaml'
+  # now define the main job which will build
+  # and push the containers in parallel
+  main:
+    needs: changes
+    if: ${{ needs.changes.outputs.triton == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -25,15 +44,6 @@ jobs:
     -
       name: Checkout
       uses: actions/checkout@v2
-
-    -
-      uses: dorny/paths-filter@v2
-      id: filter
-      with:
-        filters: |
-          .github/triton.Dockerfile
-          .github/workflows/triton-build.yaml
-
     -
       name: Log in to container registry
       uses: docker/login-action@master
@@ -44,7 +54,6 @@ jobs:
 
     -
       name: Triton Server pull-push
-      id: gw-iaas-server-container-push
       env:
         TAG: ${{ env.REGISTRY }}/ml4gw/hermes/tritonserver:${{ matrix.triton-tag }}
       run: |
