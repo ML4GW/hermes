@@ -31,6 +31,7 @@ jobs:
   main:
     needs: changes
     if: ${{ needs.changes.outputs.triton == 'true' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
