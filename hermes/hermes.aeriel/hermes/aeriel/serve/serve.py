@@ -10,10 +10,6 @@ from spython.instance import Instance
 from spython.main import Client as SingularityClient
 from tritonclient import grpc as triton
 
-DEFAULT_IMAGE = (
-    "/cvmfs/singularity.opensciencegrid.org/fastml/gwiaas.tritonserver:latest"
-)
-
 # TODO: use apps to find this automatically?
 TRITON_BINARY = "/opt/tritonserver/bin/tritonserver"
 
@@ -104,7 +100,7 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
 @contextmanager
 def serve(
     model_repo_dir: str,
-    image: str = DEFAULT_IMAGE,
+    image: str,
     name: Optional[str] = None,
     gpus: Optional[Iterable[int]] = None,
     server_args: Optional[Iterable[str]] = None,
@@ -130,8 +126,10 @@ def serve(
             inference service ought to load models
         image:
             The path to the Singularity image to execute
-            Triton inside of. Defaults to the image published
-            by Hermes to the Open Science Grid.
+            Triton inside of. If given as a relative path,
+            will first be checked relative to the current
+            working directory, then relative to
+            /cvmfs/singularity.opensciencegrid.org/ml4gw
         name:
             Name to give to the Singularity container instance
             in which the server will run.
@@ -165,6 +163,21 @@ def serve(
             method included that will hold up the calling thread
             until the server is online.
     """
+
+    if not os.path.isabs(image):
+        full_image = os.path.abspath(image)
+        if not os.path.exists(full_image):
+            full_image = os.path.join(
+                "/cvmfs/singularity.opensciencegrid.org", image
+            )
+        if not os.path.exists(full_image):
+            raise ValueError(
+                "Could not resolve relative path {} "
+                "to existing container image".format(full_image)
+            )
+        image = full_image
+    elif not os.path.exists(image):
+        raise ValueError(f"Container image {image} does not exist")
 
     # create the base triton server command and
     # point it at the model repository
