@@ -1,6 +1,7 @@
 import os
 import time
 from queue import Queue
+from tempfile import NamedTemporaryFile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -52,16 +53,31 @@ def container_name(request):
     return request.param
 
 
+@pytest.fixture(params=["abs", "rel"])
+def image(request, tmp_path):
+    if request.param == "abs":
+        tmp_path.mkdir(exist_ok=True)
+        image = tmp_path / "image"
+        with open(image, "w") as f:
+            f.write("")
+        yield str(image)
+    else:
+        with NamedTemporaryFile() as f:
+            yield f.name
+
+
 def execute(instance, cmd, *args, **kwargs):
     time.sleep(0.1)
     return cmd[-1]
 
 
-def test_singularity_instance_run(gpus, log_file, server_args, container_name):
+def test_singularity_instance_run(
+    gpus, log_file, server_args, container_name, image
+):
     args = None if server_args is None else server_args.split()
     ctx = serve(
         "/path/to/repo",
-        "/path/to/image",
+        image,
         name=container_name,
         gpus=gpus,
         server_args=args,
@@ -81,8 +97,10 @@ def test_singularity_instance_run(gpus, log_file, server_args, container_name):
         with patch("spython.main.Client.execute") as execute_patch:
             with ctx as instance:
                 # make sure that the expected instance gets created
+                if not os.path.isabs(image):
+                    image = os.path.abspath(image)
                 instance_patch.assert_called_with(
-                    "/path/to/image",
+                    image,
                     name=container_name,
                     start=True,
                     quiet=False,
@@ -118,11 +136,11 @@ def test_singularity_instance_run(gpus, log_file, server_args, container_name):
             )
 
 
-def test_singularity_instance_run_with_host_devices(gpus):
+def test_singularity_instance_run_with_host_devices(gpus, image):
     visible_devices = list(map(str, [4, 3, 5, 2, 6]))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(visible_devices)
 
-    ctx = serve("/path/to/repo", "/path/to/image", name="test", gpus=gpus)
+    ctx = serve("/path/to/repo", image, name="test", gpus=gpus)
 
     if gpus is None:
         expected_environ = {}
@@ -134,8 +152,10 @@ def test_singularity_instance_run_with_host_devices(gpus):
     with patch("spython.main.Client.instance") as mock:
         with patch("spython.main.Client.execute"):
             with ctx:
+                if not os.path.isabs(image):
+                    image = os.path.abspath(image)
                 mock.assert_called_with(
-                    "/path/to/image",
+                    image,
                     name="test",
                     start=True,
                     quiet=False,
