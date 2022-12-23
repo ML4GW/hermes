@@ -12,6 +12,7 @@ from tritonclient import grpc as triton
 
 # TODO: use apps to find this automatically?
 TRITON_BINARY = "/opt/tritonserver/bin/tritonserver"
+LDG_REGISTRY = "/cvmfs/singularity.opensciencegrid.org/ml4gw"
 
 
 def target(q: Queue, instance: Instance, cmd: str, *args, **kwargs):
@@ -167,13 +168,12 @@ def serve(
     if not os.path.isabs(image):
         full_image = os.path.abspath(image)
         if not os.path.exists(full_image):
-            full_image = os.path.join(
-                "/cvmfs/singularity.opensciencegrid.org", image
-            )
+            full_image = f"{LDG_REGISTRY}/{image}"
+
         if not os.path.exists(full_image):
             raise ValueError(
                 "Could not resolve relative path {} "
-                "to existing container image".format(full_image)
+                "to existing container image".format(image)
             )
         image = full_image
     elif not os.path.exists(image):
