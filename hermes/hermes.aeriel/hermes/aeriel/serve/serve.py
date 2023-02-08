@@ -75,9 +75,9 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
                     # and placed the response in the _response_queue.
                     # If so, something has gone wrong
                     response = q.get_nowait()
-                    if log_file is not None and len(response["message"]) == 0:
+                    if log_file is not None:
                         with open(log_file, "r") as f:
-                            response["message"] = f.read()
+                            response["message"] += "\n" + f.read()
 
                     raise ValueError(
                         "Server failed to start with return code "
