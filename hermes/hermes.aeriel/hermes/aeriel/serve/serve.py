@@ -75,7 +75,7 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
                     # and placed the response in the _response_queue.
                     # If so, something has gone wrong
                     response = q.get_nowait()
-                    if log_file is not None:
+                    if log_file is not None and os.path.exists(log_file):
                         with open(log_file, "r") as f:
                             response["message"] += "\n" + f.read()
 
