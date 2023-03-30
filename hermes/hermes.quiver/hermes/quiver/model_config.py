@@ -265,10 +265,11 @@ class ModelConfig:
 
 
 class EnsembleConfig(ModelConfig):
-    def add_step(self, model: "Model", version: Optional[int] = None):
-        version = version or -1
-        step = model_config.ModelEnsembling.Step(
-            model_name=model.name, model_version=version
+    @property
+    def steps(self):
+        return self._config.ensemble_scheduling.step
+
+    def make_step(self, model: "Model", version: Optional[int] = None):
+        return model_config.ModelEnsembling.Step(
+            model_name=model.name, model_version=version or -1
         )
-        self._config.ensemble_scheduling.step.append(step)
-        return step

@@ -204,6 +204,12 @@ class Model:
         return export_path
 
 
+@dataclass
+class EnsembleStep:
+    model: str
+    version: Optional[int] = None
+
+
 class EnsembleModel(Model):
     """A meta-model linking together inputs and outputs from `Model`s
 
@@ -222,18 +228,18 @@ class EnsembleModel(Model):
             for step in self.config.ensemble_scheduling.step
         ]
 
-    def _update_step_map(
-        self,
-        tensor: ExposedTensor,
-        key: str,
-        exposed_type: "EXPOSED_TYPE",
-    ):
-        """Updates the routing of data through the ensemble."""
-
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == tensor.model.name:
-                step_map = getattr(step, exposed_type + "_map")
-                step_map[tensor.name] = key
+    def get_step(self, tensor, version):
+        new = self.config.make_step(tensor.model, version)
+        for step in self.config.steps:
+            for attr in ("name", "version"):
+                attr = f"model_{attr}"
+                if getattr(new, attr) != getattr(step, attr):
+                    break
+            else:
+                return step
+        else:
+            self.config.steps.append(new)
+            return self.config.steps[-1]
 
     def add_input(
         self,
@@ -241,8 +247,7 @@ class EnsembleModel(Model):
         version: Optional[int] = None,
         key: Optional[str] = None,
     ) -> ExposedTensor:
-        if input.model not in self.models:
-            self.config.add_step(input.model, version=version)
+        step = self.get_step(input, version)
 
         # create an input using either the specified key if
         # provided, otherwise using the name of the input tensor
@@ -253,7 +258,7 @@ class EnsembleModel(Model):
         else:
             raise ValueError(f"Already added input using key {key}")
 
-        self._update_step_map(input, key, "input")
+        step.input_map[input.name] = key
         return self.inputs[key]
 
     def add_output(
@@ -262,8 +267,7 @@ class EnsembleModel(Model):
         version: Optional[int] = None,
         key: Optional[str] = None,
     ) -> ExposedTensor:
-        if output.model not in self.models:
-            self.config.add_step(output.model, version=version)
+        step = self.get_step(output, version)
 
         # create an output using either the specified key if
         # provided, otherwise using the name of the output tensor
@@ -274,7 +278,7 @@ class EnsembleModel(Model):
         else:
             raise ValueError(f"Already added output using key {key}")
 
-        self._update_step_map(output, key, "output")
+        step.output_map[output.name] = key
         return self.outputs[key]
 
     def add_streaming_inputs(
@@ -284,15 +288,8 @@ class EnsembleModel(Model):
         batch_size: int = 1,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
+        versions: Optional[Union[int, Sequence[int]]] = None
     ) -> ExposedTensor:
-        if not isinstance(inputs, Sequence):
-            inputs = [inputs]
-
-        for input in inputs:
-            if input.model not in self.models:
-                # TODO: support versions
-                self.config.add_step(input.model)
-
         # Do the import for the streaming code here
         # so that TensorFlow doesn't become a mandatory
         # dependency of the library
@@ -305,6 +302,17 @@ class EnsembleModel(Model):
                     "must install PyTorch first"
                 )
             raise
+
+        if not isinstance(inputs, Sequence):
+            inputs = [inputs]
+
+        versions = versions or -1
+        if not isinstance(versions, Sequence):
+            versions = [versions] * len(inputs)
+
+        steps = []
+        for input, version in zip(inputs, versions):
+            steps.append(self.get_step(input, version))
 
         # add a streaming model to the repository
         # and set up its config with the correct
@@ -330,14 +338,13 @@ class EnsembleModel(Model):
         # the channel axis each one of these lies
         metadata = []
         outputs = streaming_model.outputs
-        for tensor, output in zip(inputs, streaming_model.config.output):
-            self.pipe(outputs[output.name], tensor)
+        it = zip(inputs, versions, streaming_model.config.output)
+        for tensor, version, output in it:
+            self.pipe(outputs[output.name], tensor, inbound_version=version)
             metadata.append(f"{tensor.model.name}/{tensor.name}")
         self.config.parameters["states"].string_value = ",".join(metadata)
 
-        # return the streaming model we created
-        # TODO: better to return the "stream" input
-        # of this model to be more consistent with `add_input`?
+        # return the streaming input we created
         return streaming_input
 
     def add_streaming_output(
@@ -348,10 +355,9 @@ class EnsembleModel(Model):
         batch_size: Optional[int] = None,
         name: Optional[str] = None,
         streams_per_gpu: int = 1,
+        version: Optional[int] = None,
+        key: Optional[str] = None
     ) -> ExposedTensor:
-        if output.model not in self.models:
-            self.config.add_step(output.model)
-
         # Do the import for the streaming code here
         # so that TensorFlow doesn't become a mandatory
         # dependency of the library
@@ -377,7 +383,12 @@ class EnsembleModel(Model):
         aggregator_output = list(streaming_model.outputs.values())[0]
         streaming_output = self.add_output(aggregator_output)
 
-        self.pipe(output, streaming_model.inputs["update"])
+        self.pipe(
+            output,
+            streaming_model.inputs["update"],
+            key=key,
+            outbound_version=version
+        )
         return streaming_output
 
     def pipe(
@@ -385,6 +396,8 @@ class EnsembleModel(Model):
         outbound: ExposedTensor,
         inbound: ExposedTensor,
         key: Optional[str] = None,
+        outbound_version: Optional[int] = None,
+        inbound_version: Optional[int] = None
     ) -> None:
         # verify that we're connecting tensors of the same shape
         for dim1, dim2 in zip(outbound.shape, inbound.shape):
@@ -397,27 +410,19 @@ class EnsembleModel(Model):
         # add the models associated with the
         # inbound and outbound tensors to the
         # ensmble if they aren't in it yet
-        for tensor in [inbound, outbound]:
-            if tensor.model not in self.models:
-                # TODO: support per-model versioning
-                self.config.add_step(tensor.model)
-
-        # find the step in the config associated
-        # with the outbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == outbound.model.name:
-                break
+        in_step = self.get_step(inbound, inbound_version)
+        out_step = self.get_step(outbound, outbound_version)
 
         # check to see if this tensor has already been
         # associated with some named mapping.
-        existing_key = step.output_map[outbound.name]
+        existing_key = out_step.output_map[outbound.name]
         if existing_key == "":
             # the tensor name is not currently associated with
             # any mapping, so create one for it using either
             # the specified key if provided, otherwise using
             # just the tensor name as-is
             key = key or outbound.name
-            self._update_step_map(outbound, key, "output")
+            out_step.output_map[outbound.name] = key
         else:
             if key is not None and existing_key != key:
                 # if we specified a name but the tensor
@@ -433,18 +438,13 @@ class EnsembleModel(Model):
             # to use in the inbound tensor's input map
             key = existing_key
 
-        # find the step associated with the inbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == inbound.model.name:
-                break
-
         # check to see if this tensor has already been
         # given a key
-        existing_key = step.input_map[inbound.name]
+        existing_key = in_step.input_map[inbound.name]
         if existing_key == "":
             # if not, create an input mapping entry
             # for it using the outbound tensor's key
-            self._update_step_map(inbound, key, "input")
+            in_step.input_map[inbound.name] = key
         elif existing_key != key:
             # if the outbound tensor's key doesn't match
             # the key that already exists at the inbound

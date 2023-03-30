@@ -196,6 +196,6 @@ def make_streaming_output_model(
         input_shape=(batch_size,) + input.shape[1:],
         state_names=["online_average"],
         state_shapes=[snapshot_shape],
-        output_names=["output_stream"],
+        output_names=[f"{name}-output_stream"],
         streams_per_gpu=streams_per_gpu,
     )
