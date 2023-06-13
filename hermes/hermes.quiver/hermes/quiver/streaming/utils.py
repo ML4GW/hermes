@@ -35,8 +35,8 @@ def add_streaming_model(
 
     states = []
     for state_name in state_names:
-        state_input = model.config.input.pop(1)
-        model.config.output.pop(len(output_names))
+        state_input = model.config.input.pop(-1)
+        model.config.output.pop(-1)
 
         state = model_config.ModelSequenceBatching.State(
             dims=state_input.dims,
@@ -52,7 +52,7 @@ def add_streaming_model(
                 )
             ],
         )
-        states.append(state)
+        states.insert(0, state)
 
     sequence_batching = model_config.ModelSequenceBatching(
         max_sequence_idle_microseconds=10000000,

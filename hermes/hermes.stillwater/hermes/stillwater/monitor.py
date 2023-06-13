@@ -242,8 +242,10 @@ class ServerMonitor(PipelineProcess):
             # now collect the amount of time spent on each subprocess
             for process in _processes:
                 dur_re = _get_re(process, "duration_us", model, version)
-                # TODO: catch a miss here
-                duration = int(float(dur_re.search(content).group(0)))
+                duration = dur_re.search(content)
+                if duration is None:
+                    break
+                duration = int(duration.group(0))
 
                 try:
                     last = model_tracker[process]
@@ -257,9 +259,9 @@ class ServerMonitor(PipelineProcess):
                     line += "," + str(diff)
                 finally:
                     model_tracker[process] = duration
-
-            if line is not None:
-                lines.append(line)
+            else:
+                if line is not None:
+                    lines.append(line)
         return lines
 
     def target(
