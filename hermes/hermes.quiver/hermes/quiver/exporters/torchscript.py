@@ -31,10 +31,10 @@ class TorchScriptMeta(abc.ABCMeta):
 class TorchScript(Exporter, metaclass=TorchScriptMeta):
     def __call__(
         self, model_fn, version, input_shapes, output_names=None
-    ):
+    ) -> None:
         if output_names is not None:
             raise ValueError(
-                "Cannot specify output_shapes for TorchScript exporter"
+                "Cannot specify output_names for TorchScript exporter"
             )
 
         input_shapes = {f"INPUT__{i}": j for i, j in enumerate(input_shapes)}
