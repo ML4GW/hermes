@@ -8,7 +8,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.12"
 tritonclient = {extras = ["all"], version = "^2.18"}
 tblib = "^1.7"
 urllib3 = "^1.26"

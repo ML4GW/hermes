@@ -9,7 +9,7 @@ packages = [
 # readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.12"
 tritonclient = {extras = ["all"], version = "^2.22"}
 
 numpy = {version = "^1.22", optional = true}
