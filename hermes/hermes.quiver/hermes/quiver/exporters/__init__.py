@@ -3,3 +3,4 @@ from .ensemble import Ensemble
 from .keras_savedmodel import KerasSavedModel
 from .torch_onnx import TorchOnnx
 from .torch_tensorrt import TorchTensorRT
+from .torchscript import TorchScript

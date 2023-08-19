@@ -86,6 +86,17 @@ def test_ensemble_model(temp_local_repo, torch_model):
     assert list(ensemble.config.output[0].dims) == [-1, 10]
     assert ensemble.outputs["y"].shape == (None, 10)
 
+    # now test versioning
+    model1.export_version(torch_model)
+    ensemble = Model(
+        "versioned-ensemble", temp_local_repo, platform=Platform.ENSEMBLE
+    )
+    ensemble.add_input(model1.inputs["x"], version=2)
+    ensemble.pipe(model1.outputs["y"], model2.inputs["x"])
+    ensemble.add_output(model2.outputs["y"])
+    schedule = ensemble.config.ensemble_scheduling
+    assert schedule.step[0].model_version == 2
+
 
 @pytest.mark.torch
 def test_ensemble_streaming_input(temp_local_repo, torch_model):

@@ -32,7 +32,9 @@ class Exporter(metaclass=abc.ABCMeta):
     fs: "FileSystem"
 
     def _check_exposed_tensors(
-        self, exposed_type: "EXPOSED_TYPE", provided: _SHAPES_TYPE = None
+        self,
+        exposed_type: "EXPOSED_TYPE",
+        provided: _SHAPES_TYPE = None,
     ) -> None:
         """
         Perform some checks on the provided input
@@ -65,7 +67,7 @@ class Exporter(metaclass=abc.ABCMeta):
         exposed = getattr(self.config, exposed_type)
         if len(exposed) == 0 and provided is None:
             # our config doesn't have any exposed tensors
-            # already, and we haven't provided any
+            # already, and we haven't provided any, so
             # raise an error because we don't have any
             # way to infer shapes to write to the config
             raise ValueError("Must specify {} shapes".format(exposed_type))
