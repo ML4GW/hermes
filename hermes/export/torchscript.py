@@ -10,25 +10,36 @@ try:
 except ImportError:
     _has_torch = False
 
-from hermes.quiver import Platform
-from hermes.quiver.exporters import Exporter
+from hermes.repo import Platform
+from hermes.export import Exporter
 
 
-class TorchOnnxMeta(abc.ABCMeta):
+class TorchScriptMeta(abc.ABCMeta):
     @property
     def handles(self):
         if not _has_torch:
             raise ImportError(
-                "Must have torch installed to use TorchOnnx export platform"
+                "Must have torch installed to use TorchScript export platform"
             )
         return torch.nn.Module
 
     @property
     def platform(self):
-        return Platform.ONNX
+        return Platform.TORCHSCRIPT
 
 
-class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
+class TorchScript(Exporter, metaclass=TorchScriptMeta):
+    def __call__(
+        self, model_fn, version, input_shapes, output_names=None
+    ) -> None:
+        if output_names is not None:
+            raise ValueError(
+                "Cannot specify output_names for TorchScript exporter"
+            )
+
+        input_shapes = {f"INPUT__{i}": j for i, j in enumerate(input_shapes)}
+        super().__call__(model_fn, version, input_shapes, output_names)
+
     def _get_tensor(self, shape):
         tensor_shape = []
         for dim in shape:
@@ -45,7 +56,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # and pass them along if they were provided?
         return torch.randn(*tensor_shape)
 
-    def _get_output_shapes(self, model_fn, output_names):
+    def _get_output_shapes(self, model_fn, _):
         # now that we know we have inputs added to our
         # model config, use that config to generate
         # framework tensors that we'll feed through
@@ -113,20 +124,13 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
 
         # if we provided names for the outputs, return them
         # as a dict for validation against the config
-        if output_names is not None:
-            shapes = {name: shape for name, shape in zip(output_names, shapes)}
+        shapes = {f"OUTPUT__{i}": j for i, j in enumerate(shapes)}
         return shapes
 
     def export(self, model_fn, export_path, verbose=0, **kwargs):
-        inputs, dynamic_axes = [], {}
+        inputs = []
         for input in self.config.input:
-            if input.dims[0] == -1:
-                dynamic_axes[input.name] = {0: "batch"}
             inputs.append(self._get_tensor(input.dims))
-
-        if len(dynamic_axes) > 0:
-            for output in self.config.output:
-                dynamic_axes[output.name] = {0: "batch"}
 
         if len(inputs) == 1:
             inputs = inputs[0]
@@ -136,15 +140,8 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # export to a BytesIO object so that we
         # can copy the bytes to cloud filesystems
         export_obj = BytesIO()
-        torch.onnx.export(
-            model_fn,
-            inputs,
-            export_obj,
-            input_names=[x.name for x in self.config.input],
-            output_names=[x.name for x in self.config.output],
-            dynamic_axes=dynamic_axes or None,
-            **kwargs
-        )
+        trace = torch.jit.trace(model_fn, inputs)
+        torch.jit.save(trace, export_obj)
 
         # write the written bytes and return
         # the path to which they were written

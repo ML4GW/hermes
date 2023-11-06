@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 import requests
 
 try:
-    from hermes.quiver.exporters.tensorrt.onnx import convert_network
+    from hermes.export.tensorrt.onnx import convert_network
 
     _has_trt = True
 except ImportError as e:
@@ -15,12 +15,12 @@ except ImportError as e:
     _has_trt = False
     _error_msg = str(e)
 
-from hermes.quiver.exporters.torch_onnx import TorchOnnx, TorchOnnxMeta
-from hermes.quiver.platform import Platform, conventions
-from hermes.quiver.types import SHAPE_TYPE
+from hermes.export.torch_onnx import TorchOnnx, TorchOnnxMeta
+from hermes.repo.platform import Platform, conventions
+from hermes.repo.types import SHAPE_TYPE
 
 if TYPE_CHECKING:
-    from hermes.quiver.model import Model
+    from hermes.repo.model import Model
 
 
 class TorchTensorRTMeta(TorchOnnxMeta):
@@ -28,7 +28,7 @@ class TorchTensorRTMeta(TorchOnnxMeta):
     def handles(self):
         # have to import Model here since model depends
         # on exporter utils, which imports this
-        from hermes.quiver.model import Model
+        from hermes.repo.model import Model
 
         handle = TorchOnnxMeta.handles.fget(self)
         return (handle, Model)
@@ -138,7 +138,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
                 # do import here since model repo depends on
                 # model which depends on exporter
                 # TODO: what's a better way to handle this?
-                from hermes.quiver.model_repository import ModelRepository
+                from hermes.repo.model_repository import ModelRepository
 
                 repo = ModelRepository(d)
                 model = repo.add("tmp", platform=Platform.ONNX)

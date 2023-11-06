@@ -2,8 +2,8 @@ import re
 from pathlib import Path
 from typing import Any, Union
 
-from hermes.quiver import Model, Platform, io
-from hermes.quiver.io.exceptions import NoFilesFoundError
+from hermes.repo import Model, Platform, io
+from hermes.repo.io.exceptions import NoFilesFoundError
 
 
 class ModelRepository:

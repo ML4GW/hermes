@@ -1,8 +1,8 @@
 import abc
 from typing import Optional, Sequence
 
-from hermes.quiver import Platform
-from hermes.quiver.exporters import Exporter
+from hermes.repo import Platform
+from hermes.export import Exporter
 
 
 class EnsembleMeta(abc.ABCMeta):

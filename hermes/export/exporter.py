@@ -1,17 +1,18 @@
 import abc
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Optional, Union
 
-from hermes.quiver import conventions
-from hermes.quiver.types import SHAPE_TYPE
+from hermes.repo.platform import conventions
+from hermes.repo.types import SHAPE_TYPE
 
 if TYPE_CHECKING:
-    from hermes.quiver import ModelConfig, Platform
-    from hermes.quiver.io import FileSystem
-    from hermes.quiver.types import EXPOSED_TYPE
+    from hermes.repo import ModelConfig, Platform
+    from hermes.repo.io import FileSystem
+    from hermes.repo.types import EXPOSED_TYPE
 
 
-_SHAPES_TYPE = Union[Sequence[SHAPE_TYPE], Dict[str, SHAPE_TYPE], None]
+_SHAPES_TYPE = Union[Sequence[SHAPE_TYPE], dict[str, SHAPE_TYPE], None]
 
 
 @dataclass
@@ -145,7 +146,7 @@ class Exporter(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def _get_output_shapes(
         self, model_fn: Callable, output_names: Optional[Sequence[str]]
-    ) -> Union[Sequence[SHAPE_TYPE], Dict[str, SHAPE_TYPE]]:
+    ) -> Union[list[SHAPE_TYPE], dict[str, SHAPE_TYPE]]:
         """Infer the output shapes for the model
 
         Uses the `model_fn` and input names and shapes
@@ -182,6 +183,7 @@ class Exporter(metaclass=abc.ABCMeta):
         model_fn: Callable,
         version: int,
         input_shapes: _SHAPES_TYPE = None,
+        state_shapes: _SHAPES_TYPE = None,
         output_names: Optional[Sequence[str]] = None,
         **kwargs,
     ):

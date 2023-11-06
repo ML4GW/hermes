@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Callable, Union
 from .exporter import Exporter
 
 if TYPE_CHECKING:
-    from hermes.quiver.model import Model
+    from hermes.repo import Model
 
 
 def find_exporter(

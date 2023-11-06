@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
 
-from hermes.quiver import Platform
-from hermes.quiver.exporters.utils import find_exporter
-from hermes.quiver.model_config import ModelConfig
+from hermes.repo import ModelConfig, Platform
+from hermes.export.utils import find_exporter
 
 if TYPE_CHECKING:
-    from hermes.quiver import ModelRepository
-    from hermes.quiver.io.file_system import FileSystem
-    from hermes.quiver.types import EXPOSED_TYPE, SHAPE_TYPE
+    from hermes.repo import ModelRepository
+    from hermes.repo.io.file_system import FileSystem
+    from hermes.repo.types import EXPOSED_TYPE, SHAPE_TYPE
 
 
 @dataclass
@@ -137,6 +136,7 @@ class Model:
         model_fn: Union[Callable, "Model"],
         version: Optional[int] = None,
         input_shapes: Optional[Dict[str, "SHAPE_TYPE"]] = None,
+        state_shapes: Optional[Dict[str, "SHAPE_TYPE"]] = None,
         output_names: Optional[Sequence[str]] = None,
         verbose: int = 0,
         **kwargs,
@@ -158,6 +158,9 @@ class Model:
                 A dictionary mapping from tensor names to shapes. Only
                 required for certain export platforms, consult the
                 relevant documentation.
+            state_shapes:
+                A dictionary mapping from tensor names to shapes. For
+                export platforms taht
             output_names:
                 A sequence of names to assign to output tensors
                 from the model. Only required for certain export
@@ -191,7 +194,12 @@ class Model:
 
         try:
             export_path = exporter(
-                model_fn, version, input_shapes, output_names, **kwargs
+                model_fn,
+                version,
+                input_shapes,
+                state_shapes,
+                output_names,
+                **kwargs
             )
             self.config.write()
         except Exception:

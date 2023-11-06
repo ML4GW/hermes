@@ -2,11 +2,11 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence, Union
 
 from tritonclient.grpc import model_config_pb2 as model_config
 
-from hermes.quiver import Platform
+from hermes.repo import Platform
 
 if TYPE_CHECKING:
-    from hermes.quiver import Model
-    from hermes.quiver.types import SHAPE_TYPE
+    from hermes.repo import Model
+    from hermes.repo.types import SHAPE_TYPE
 
 
 KIND_TYPE = Literal["auto", "cpu", "gpu"]
