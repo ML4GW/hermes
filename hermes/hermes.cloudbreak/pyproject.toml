@@ -28,5 +28,5 @@ gcp = ["google-cloud-container", "google-cloud-storage", "google-cloud-compute"]
 pytest = "^6.2"
 
 [build-system]
-requires = ["poetry>=1.2"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
