@@ -116,6 +116,45 @@ def build_instance(
     log_file: Optional[str] = None,
     start: bool = True,
 ):
+    """
+    Build a Singularity instance object equipped with
+    a `.execute()` method that will run the triton command
+    inside the container in a separate thread, and
+    a `.wait()` method that can be called after .execute()
+    to block until the server is online.
+
+    Args:
+        model_repo_dir:
+            Path to a Triton model repository from which the
+            inference service ought to load models
+        image:
+            The path to the Singularity image to execute
+            Triton inside of. If given as a relative path,
+            will first be checked relative to the current
+            working directory, then relative to
+            /cvmfs/singularity.opensciencegrid.org/ml4gw
+        name:
+            Name to give to the Singularity container instance
+            in which the server will run.
+        gpus:
+            The gpu indices to expose to Triton via the
+            `CUDA_VISIBLE_DEVICES` environment variable. Note
+            that if the host environment has the `CUDA_VISIBLE_DEVICES`
+            variable set, the passed indices will be assumed to be
+            relative to the GPU ids as specified in that variable.
+            For example, if `CUDA_VISIBLE_DEVICES=4,2,6` on the
+            host environment, then passing `gpus=[1, 2]` will set
+            `CUDA_VISIBLE_DEVICES=2,6` inside the container.
+        server_args:
+            Additional arguments with which to initialize the
+            `tritonserver` executable
+        log_file:
+            A path to which to pipe Triton's stdout and stderr
+            logs. If left as `None`, Triton's logs will not
+            be captured.
+        start:
+            If `True`, start the container instance immediately.
+    """
 
     if not os.path.isabs(image):
         full_image = os.path.abspath(image)
