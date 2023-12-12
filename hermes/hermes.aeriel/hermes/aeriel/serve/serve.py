@@ -98,6 +98,95 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
     return wait
 
 
+def get_execute(q, instance, cmd):
+    def execute():
+        runner = Thread(target=target, args=(q, instance, cmd))
+        runner.start()
+        return runner
+
+    return execute
+
+
+def build_instance(
+    model_repo_dir: str,
+    image: str,
+    name: Optional[str] = None,
+    gpus: Optional[Iterable[int]] = None,
+    server_args: Optional[Iterable[str]] = None,
+    log_file: Optional[str] = None,
+    start: bool = True,
+):
+
+    if not os.path.isabs(image):
+        full_image = os.path.abspath(image)
+        if not os.path.exists(full_image):
+            full_image = f"{LDG_REGISTRY}/{image}"
+
+        if not os.path.exists(full_image):
+            raise ValueError(
+                "Could not resolve relative path {} "
+                "to existing container image".format(image)
+            )
+        image = full_image
+    elif not os.path.exists(image):
+        raise ValueError(f"Container image {image} does not exist")
+
+    # create the base triton server command and
+    # point it at the model repository
+    cmd = f"{TRITON_BINARY} --model-repository {model_repo_dir}"
+
+    # add in any additional arguments to the server
+    if server_args is not None:
+        cmd += " " + " ".join(server_args)
+
+    # if we specified a log file, reroute stdout and stderr
+    # to that file (triton primarily uses stderr)
+    if log_file is not None:
+        cmd += f" > {log_file} 2>&1"
+
+    # add environment variables for the specified GPUs
+    environ = {}
+    if gpus is not None:
+        host_visible_gpus = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+        if host_visible_gpus is not None:
+            host_visible_gpus = host_visible_gpus.split(",")
+
+            mapped_gpus = []
+            for gpu in gpus:
+                try:
+                    gpu = host_visible_gpus[gpu]
+                except IndexError:
+                    raise ValueError(
+                        "GPU index {} too large for host environment "
+                        "with only {} available GPUs".format(
+                            gpu, len(host_visible_gpus)
+                        )
+                    )
+                mapped_gpus.append(gpu)
+            gpus = mapped_gpus
+
+        environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpus))
+
+    # spin up a container instance using the specified image
+    instance = SingularityClient.instance(
+        image,
+        name=name,
+        start=start,
+        quiet=False,  # if we don't set this, the -s doesn't matter
+        options=["--nv"],
+        singularity_options=["-s"],
+        environ=environ,
+    )
+
+    # assign useful .wait and .execute methods to the instance:
+    # .wait will block until the server is online, and .execute
+    # will run the server command in a separate thread
+    q = Queue()
+    instance.wait = get_wait(q, log_file)
+    instance.execute = get_execute(q, instance, cmd)
+    return instance
+
+
 @contextmanager
 def serve(
     model_repo_dir: str,
@@ -165,74 +254,22 @@ def serve(
             until the server is online.
     """
 
-    if not os.path.isabs(image):
-        full_image = os.path.abspath(image)
-        if not os.path.exists(full_image):
-            full_image = f"{LDG_REGISTRY}/{image}"
-
-        if not os.path.exists(full_image):
-            raise ValueError(
-                "Could not resolve relative path {} "
-                "to existing container image".format(image)
-            )
-        image = full_image
-    elif not os.path.exists(image):
-        raise ValueError(f"Container image {image} does not exist")
-
-    # create the base triton server command and
-    # point it at the model repository
-    cmd = f"{TRITON_BINARY} --model-repository {model_repo_dir}"
-
-    # add in any additional arguments to the server
-    if server_args is not None:
-        cmd += " " + " ".join(server_args)
-
-    # if we specified a log file, reroute stdout and stderr
-    # to that file (triton primarily uses stderr)
-    if log_file is not None:
-        cmd += f" > {log_file} 2>&1"
-
-    # add environment variables for the specified GPUs
-    environ = {}
-    if gpus is not None:
-        host_visible_gpus = os.environ.get("CUDA_VISIBLE_DEVICES", None)
-        if host_visible_gpus is not None:
-            host_visible_gpus = host_visible_gpus.split(",")
-
-            mapped_gpus = []
-            for gpu in gpus:
-                try:
-                    gpu = host_visible_gpus[gpu]
-                except IndexError:
-                    raise ValueError(
-                        "GPU index {} too large for host environment "
-                        "with only {} available GPUs".format(
-                            gpu, len(host_visible_gpus)
-                        )
-                    )
-                mapped_gpus.append(gpu)
-            gpus = mapped_gpus
-
-        environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpus))
-
-    # spin up a container instance using the specified image
-    instance = SingularityClient.instance(
+    # build the singularity instance object that
+    # will run the triton server
+    instance = build_instance(
+        model_repo_dir,
         image,
-        name=name,
-        start=True,
-        quiet=False,  # if we don't set this, the -s doesn't matter
-        options=["--nv"],
-        singularity_options=["-s"],
-        environ=environ,
+        name,
+        gpus,
+        server_args,
+        log_file,
     )
 
     # execute the command inside the running container instance.
     # Run it in a separate thread so that we can do work
-    # while it runs in this same process
-    q = Queue()
-    runner = Thread(target=target, args=(q, instance, cmd))
-    runner.start()
-    instance.wait = get_wait(q, log_file)
+    # while it runs in this same process. Return the thread
+    # object for calling .join() later
+    runner = instance.execute()
     try:
         if wait:
             instance.wait()
