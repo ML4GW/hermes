@@ -6,7 +6,9 @@ authors = [
     "Alec Gunny <alec.gunny@ligo.org>",
     "Ethan Marx <emarx@mit.edu>"
 ]
-
+packages = [
+    { include = "hermes" }
+]
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
 
