@@ -1,9 +1,12 @@
 [tool.poetry]
-name = "hermes"
+name = "ml4gw-hermes"
 version = "0.0.1"
 description = "Inference-as-a-Service deployment made simple"
 authors = [
     "Alec Gunny <alec.gunny@ligo.org>",
+]
+packages = [
+    include = {"hermes"}
 ]
 
 [tool.poetry.dependencies]
