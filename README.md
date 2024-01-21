@@ -21,8 +21,7 @@ The `aeriel.monitor` submodule contains a `ServerMonitor` context manager for mo
 `quiver` also contains utilities for converting models from your framework of choice to NVIDIA's [TensorRT](https://developer.nvidia.com/tensorrt) inference library, which can sometimes help accelerate inference.
 
 ## Examples
-### `aeriel.serve` submodule
-The most important function here is the `hermes.aeriel.serve.serve` context, which will use Singularity's Python APIs to spin up a local Singularity container instance running Triton:
+### Local Triton Server with `hermes.aeriel.serve.serve` 
 
 ```python
 from hermes.aeriel.serve import serve
