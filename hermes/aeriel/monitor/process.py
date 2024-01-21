@@ -4,13 +4,13 @@ import time
 from queue import Empty
 from typing import TYPE_CHECKING, Optional
 
-from hermes.stillwater.logging import listener, logger
-from hermes.stillwater.utils import ExceptionWrapper, Throttle
+from hermes.aeriel.monitor.logging import listener, logger
+from hermes.aeriel.monitor.utils import ExceptionWrapper, Throttle
 
 if TYPE_CHECKING:
     from queue import Queue
 
-    from hermes.stillwater.utils import Package
+    from hermes.aeriel.monitor.utils import Package
 
 
 class PipelineProcess(mp.Process):

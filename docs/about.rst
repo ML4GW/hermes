@@ -5,4 +5,4 @@ Installation
 ------------
 .. code-block::  bash
 
-    pip install gravswell.quiver
+    pip install ml4gw-hermes 

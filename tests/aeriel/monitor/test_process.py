@@ -2,8 +2,8 @@ import time
 
 import pytest
 
-from hermes.stillwater.process import Pipeline, PipelineProcess
-from hermes.stillwater.utils import ExceptionWrapper
+from hermes.aeriel.monitor.process import Pipeline, PipelineProcess
+from hermes.aeriel.monitor.utils import ExceptionWrapper
 
 
 class ErrorProcess(PipelineProcess):

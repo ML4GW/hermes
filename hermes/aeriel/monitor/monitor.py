@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Dict, Iterable, List, Union
 import tritonclient.grpc as triton
 import urllib3
 
-from hermes.stillwater.logging import listener
-from hermes.stillwater.process import PipelineProcess
+from hermes.aeriel.monitor.logging import listener
+from hermes.aeriel.monitor.process import PipelineProcess
 
 if TYPE_CHECKING:
     from io import TextIOWrapper

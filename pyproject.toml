@@ -1,16 +1,67 @@
 [tool.poetry]
-name = "hermes"
+name = "ml4gw-hermes"
 version = "0.0.1"
 description = "Inference-as-a-Service deployment made simple"
 authors = [
     "Alec Gunny <alec.gunny@ligo.org>",
+    "Ethan Marx <emarx@mit.edu>"
+]
+packages = [
+    {include = "hermes"}
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.12"
+tritonclient = {extras = ["all"], version = "^2.22"}
+
+# aeriel.client
+numpy = {version = "^1.22", optional = true}
+
+# aeriel.serve
+spython = {version = "^0.2", optional = true}
+
+# aeriel.monitor
+tblib = "^1.7"
+urllib3 = "^1.26"
+
+# quiver
+protobuf = "^3.17"
+requests = "^2.26.0"
+
+# quiver optional dependencies
+tensorflow = {version = "^2.3", optional = true}
+torch = {version = "^1.7", optional = true}
+google-cloud-storage = {version = "^1.38", optional = true }
+nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
+
+[tool.poetry.extras]
+# quiver 
+tensorflow = ["tensorflow"]
+torch = ["torch", "urllib3"]
+gcs = ["google-cloud-storage"]
+tensorrt = ["nvidia-tensorrt"]
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^2.16"
+pytest = "^6.2"
+pytest-depends = "^1.0"
+tox = "^4.12.1"
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^4.1"
+sphinx-material = "^0.0.34"
+
+[[tool.poetry.source]]
+# NVIDIA pypi repo for tensorrt install
+name = "ngc"
+url = "https://pypi.ngc.nvidia.com"
+
+[tool.pytest.ini_options]
+markers = [
+    "tensorflow: tests that utilize TensorFlow backend",
+    "torch: tests that utilize Torch backend",
+    "gcs: tests that utilize Google Cloud Storage file system"
+]
 
 [tool.black]
 line-length = 79
@@ -31,5 +82,5 @@ multi_line_output = 3
 include_trailing_comma = true
 
 [build-system]
-requires = ["poetry>=1.2"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
