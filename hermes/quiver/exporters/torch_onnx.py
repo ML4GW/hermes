@@ -14,7 +14,7 @@ from hermes.quiver import Platform
 from hermes.quiver.exporters import Exporter
 
 
-def get_input_names_from_script_module(m: torch.jit.ScriptModule):
+def get_input_names_from_script_module(m):
     graph = m.graph
     input_names = [node.debugName().split(".")[0] for node in graph.inputs()]
     if "self" in input_names:
