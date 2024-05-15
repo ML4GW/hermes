@@ -68,7 +68,7 @@ def keras_model(dim, tf):
                 use_bias=False,
                 kernel_initializer="identity",
                 name=f"{scope}_dense",
-            )
+            ),
         ],
         name=scope,
     )

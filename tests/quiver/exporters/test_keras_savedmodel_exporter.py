@@ -10,9 +10,9 @@ def test_keras_savedmodel_exporter(temp_local_repo, keras_model):
 
     input_name = f"{scope}_dense_input"
     output_name = f"{scope}_dense/MatMul"
+
     assert keras_model.inputs[0].name.split(":")[0] == input_name
     assert keras_model.outputs[0].name.split(":")[0] == output_name
-
     model = Model("identity", temp_local_repo, Platform.ONNX)
     exporter = KerasSavedModel(model.config, model.fs)
 
