@@ -497,8 +497,13 @@ class InferenceClient:
                 except KeyError:
                     raise ValueError(f"Missing state {name}")
 
+                # sometimes we can have a batched state, in which
+                # case don't append a batch dimension
+                if shape[0] == 1 and value.ndim < len(shape):
+                    value = value[None]
+
                 # add the update to our running list of updates
-                state_values.append(value[None])
+                state_values.append(value)
 
             # if we have more than one state, combine them
             # into a single tensor along the channel axis
