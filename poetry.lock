@@ -3665,4 +3665,4 @@ torch = ["onnx", "torch", "urllib3"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.13"
-content-hash = "1026af6c6d786f83dfcc1fcb14127625fd755f0ca05b2e2bc023ca7dec161862"
+content-hash = "b644bde8703cda8b29af229e4a0eb852d08be1577865f5eb9913f28248c7b21b"
