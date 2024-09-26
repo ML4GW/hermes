@@ -1,7 +1,11 @@
 import abc
 import os
-os.environ["TF_USE_LEGACY_KERAS"]=”1”
 import tempfile
+
+from hermes.quiver import Platform
+from hermes.quiver.exporters import Exporter
+
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
 try:
     import tensorflow as tf
@@ -9,9 +13,6 @@ try:
     _has_tf = True
 except ImportError:
     _has_tf = False
-
-from hermes.quiver import Platform
-from hermes.quiver.exporters import Exporter
 
 
 class KerasSavedModelMeta(abc.ABCMeta):
