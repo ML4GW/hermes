@@ -11,7 +11,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
+python = ">=3.9,<3.13"
 tritonclient = {extras = ["all"], version = "^2.22"}
 
 # aeriel.client
@@ -29,7 +29,8 @@ protobuf = "^3.17"
 requests = "^2.26.0"
 
 # quiver optional dependencies
-tensorflow = {version = "<2.14", optional = true}
+tensorflow = {version = "<2.17", optional = true}
+tf-keras = {version = "~2.16", optional = true}
 torch = {version = "^2.0", optional = true}
 google-cloud-storage = {version = "^1.38", optional = true }
 nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
@@ -37,7 +38,7 @@ onnx = {version = "^1.15.0", optional = true}
 
 [tool.poetry.extras]
 # quiver 
-tensorflow = ["tensorflow"]
+tensorflow = ["tensorflow", "tf-keras"]
 torch = ["torch", "onnx", "urllib3"]
 gcs = ["google-cloud-storage"]
 tensorrt = ["nvidia-tensorrt"]
@@ -53,9 +54,13 @@ sphinx = "^4.1"
 sphinx-material = "^0.0.34"
 
 [[tool.poetry.source]]
-# NVIDIA pypi repo for tensorrt install
 name = "ngc"
 url = "https://pypi.ngc.nvidia.com"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
 
 [tool.pytest.ini_options]
 markers = [
