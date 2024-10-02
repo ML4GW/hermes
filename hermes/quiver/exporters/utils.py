@@ -2,9 +2,14 @@ import inspect
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Callable, Union
 
-import torch
-
 from .exporter import Exporter
+
+try:
+    import torch
+
+    _has_torch = True
+except ImportError:
+    _has_torch = False
 
 if TYPE_CHECKING:
     from hermes.quiver.model import Model
@@ -60,11 +65,12 @@ def find_exporter(
 
 
 def get_input_names_from_torch_object(
-    model_fn: Union[torch.nn.Module, torch.ScriptModule]
+    model_fn: Union["torch.nn.Module", "torch.ScriptModule"]
 ):
     """
     Parse either a torch.nn.Module or torch.ScriptModule for input names
     """
+
     if isinstance(model_fn, torch.jit.ScriptModule):
         graph = model_fn.graph
         input_names = [
