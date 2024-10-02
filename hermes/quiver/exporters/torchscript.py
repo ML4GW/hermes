@@ -1,5 +1,4 @@
 import abc
-import inspect
 from collections import OrderedDict
 from io import BytesIO
 
@@ -12,6 +11,7 @@ except ImportError:
 
 from hermes.quiver import Platform
 from hermes.quiver.exporters import Exporter
+from hermes.quiver.exporters.utils import get_input_names_from_torch_object
 
 
 class TorchScriptMeta(abc.ABCMeta):
@@ -66,11 +66,9 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
             # generate an input array of random data
             input_tensors[input.name] = self._get_tensor(input.dims)
 
-        # use function signature from module.forward
-        # to figure out in which order to pass input
-        # tensors to the model_fn
-        signature = inspect.signature(model_fn.forward)
-        parameters = OrderedDict(signature.parameters)
+        # parse either a `ScriptModule` or `torch.nn.Module`
+        # to figure out in which order to pass input tensors to the model_fn
+        parameters = get_input_names_from_torch_object(model_fn)
 
         # make sure the number of inputs to
         # the model_fn matches the number of

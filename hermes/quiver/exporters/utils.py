@@ -1,4 +1,8 @@
+import inspect
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Callable, Union
+
+import torch
 
 from .exporter import Exporter
 
@@ -53,3 +57,21 @@ def find_exporter(
                 type(model_fn), model.platform
             )
         )
+
+
+def get_input_names_from_torch_object(
+    model_fn: Union[torch.nn.Module, torch.ScriptModule]
+):
+    """
+    Parse either a torch.nn.Module or torch.ScriptModule for input names
+    """
+    if isinstance(model_fn, torch.jit.ScriptModule):
+        graph = model_fn.graph
+        input_names = [
+            node.debugName().split(".")[0] for node in graph.inputs()
+        ]
+        if "self" in input_names:
+            input_names.remove("self")
+        return OrderedDict({name: name for name in input_names})
+    signature = inspect.signature(model_fn.forward)
+    return OrderedDict(signature.parameters)
