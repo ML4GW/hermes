@@ -97,3 +97,19 @@ def torch_model(dim):
             return torch.matmul(x, self.W)
 
     return Model(dim)
+
+
+@pytest.fixture
+def torch_model_2(dim):
+    import torch
+
+    class Model(torch.nn.Module):
+        def __init__(self, size: int = 10):
+            super().__init__()
+            self.size = size
+            self.W = torch.eye(size)
+
+        def forward(self, x, y):
+            return torch.matmul(x, self.W), y
+
+    return Model(dim)

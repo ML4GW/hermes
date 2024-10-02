@@ -1,4 +1,5 @@
 import abc
+import warnings
 from collections import OrderedDict
 from io import BytesIO
 
@@ -32,12 +33,26 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
     def __call__(
         self, model_fn, version, input_shapes, output_names=None
     ) -> None:
-        if output_names is not None:
-            raise ValueError(
-                "Cannot specify output_names for TorchScript exporter"
+        # if a dictionary is passed
+        # (i.e. user specified names for tensors)
+        # warn the user about specific naming conventions
+        # for tensor input names from triton
+        if isinstance(input_shapes, dict):
+            warnings.warn(
+                "Triton expects specific naming conventions and "
+                "ordering for tensor input names. Be careful. See "
+                "https://docs.nvidia.com/deeplearning/triton-inference-server/"
+                "user-guide/docs/user_guide/model_configuration.html"
+                "#special-conventions-for-pytorch-backend"
             )
-
-        input_shapes = {f"INPUT__{i}": j for i, j in enumerate(input_shapes)}
+            return super().__call__(
+                model_fn, version, input_shapes, output_names
+            )
+        # otherwise, user passed a sequence of shapes:
+        # use tritons recommended naming conventions
+        # by inferring the names from the model_fn
+        parameters = get_input_names_from_torch_object(model_fn)
+        input_shapes = {p: s for p, s in zip(parameters, input_shapes)}
         super().__call__(model_fn, version, input_shapes, output_names)
 
     def _get_tensor(self, shape):
@@ -56,7 +71,7 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
         # and pass them along if they were provided?
         return torch.randn(*tensor_shape)
 
-    def _get_output_shapes(self, model_fn, _):
+    def _get_output_shapes(self, model_fn, output_names=None):
         # now that we know we have inputs added to our
         # model config, use that config to generate
         # framework tensors that we'll feed through
@@ -120,9 +135,22 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
         if any([x.dims[0] == -1 for x in self.config.input]):
             shapes = [(None,) + s[1:] for s in shapes]
 
-        # if we provided names for the outputs, return them
-        # as a dict for validation against the config
-        shapes = {f"OUTPUT__{i}": j for i, j in enumerate(shapes)}
+        # if we didn't provide names for the outputs,
+        # use the "OUTPUT__{i}" format
+        if output_names is None:
+            shapes = {f"OUTPUT__{i}": j for i, j in enumerate(shapes)}
+        else:
+            warnings.warn(
+                "Triton expects specific naming conventions "
+                "and ordering for tensor output names. Be careful. See "
+                "https://docs.nvidia.com/deeplearning/triton-inference-server/"
+                "user-guide/docs/user_guide/model_configuration.html"
+                "#special-conventions-for-pytorch-backend"
+            )
+            shapes = {
+                name: shape
+                for i, (name, shape) in enumerate(zip(output_names, shapes))
+            }
         return shapes
 
     def export(self, model_fn, export_path, verbose=0, **kwargs):
