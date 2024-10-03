@@ -2,7 +2,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from hermes.quiver.exporters import KerasSavedModel, TorchOnnx, utils
+from hermes.quiver.exporters import (
+    KerasSavedModel,
+    TorchOnnx,
+    TorchScript,
+    utils,
+)
 from hermes.quiver.platform import Platform
 
 
@@ -33,3 +38,12 @@ def test_find_torch_exporter(torch_model):
     good_model = make_model(Platform.ONNX)
     bad_model = make_model(Platform.SAVEDMODEL)
     _test_find_exporter(torch_model, good_model, bad_model, TorchOnnx)
+
+    good_model = make_model(Platform.TORCHSCRIPT)
+    _test_find_exporter(torch_model, good_model, bad_model, TorchScript)
+
+    import torch
+
+    script_module = torch.jit.trace(torch_model, torch.randn(1, 10))
+    good_model = make_model(Platform.TORCHSCRIPT)
+    _test_find_exporter(script_module, good_model, bad_model, TorchScript)

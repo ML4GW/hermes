@@ -259,7 +259,8 @@ class Exporter(metaclass=abc.ABCMeta):
                 "Platform metaclass has no `handles` property"
             )
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def platform(self) -> "Platform":
         try:
             return type(self).platform
