@@ -22,7 +22,7 @@ class TorchScriptMeta(abc.ABCMeta):
             raise ImportError(
                 "Must have torch installed to use TorchScript export platform"
             )
-        return torch.nn.Module
+        return (torch.nn.Module, torch.jit.ScriptModule)
 
     @property
     def platform(self):

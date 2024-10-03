@@ -21,7 +21,7 @@ class TorchOnnxMeta(abc.ABCMeta):
             raise ImportError(
                 "Must have torch installed to use TorchOnnx export platform"
             )
-        return torch.nn.Module
+        return (torch.nn.Module, torch.jit.ScriptModule)
 
     @property
     def platform(self):

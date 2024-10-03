@@ -28,6 +28,9 @@ def find_exporter(
         model_fn:
             The framework-specific function which performs the
             neural network's input/output mapping
+        model:
+            The `Model` object which specifies the desired export platform
+            and configuration information for the model
     Returns:
         An exporter to export `model_fn` to the format specified
         by this models' inference platform
@@ -65,7 +68,7 @@ def find_exporter(
 
 
 def get_input_names_from_torch_object(
-    model_fn: Union["torch.nn.Module", "torch.ScriptModule"]
+    model_fn: Union["torch.nn.Module", "torch.jit.ScriptModule"]
 ):
     """
     Parse either a torch.nn.Module or torch.ScriptModule for input names
