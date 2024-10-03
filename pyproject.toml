@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ml4gw-hermes"
-version = "0.0.1"
+version = "0.2.0"
 description = "Inference-as-a-Service deployment made simple"
 authors = [
     "Alec Gunny <alec.gunny@ligo.org>",
