@@ -1,5 +1,4 @@
 import abc
-import inspect
 from collections import OrderedDict
 from io import BytesIO
 
@@ -12,14 +11,7 @@ except ImportError:
 
 from hermes.quiver import Platform
 from hermes.quiver.exporters import Exporter
-
-
-def get_input_names_from_script_module(m):
-    graph = m.graph
-    input_names = [node.debugName().split(".")[0] for node in graph.inputs()]
-    if "self" in input_names:
-        input_names.remove("self")
-    return OrderedDict({name: name for name in input_names})
+from hermes.quiver.exporters.utils import get_input_names_from_torch_object
 
 
 class TorchOnnxMeta(abc.ABCMeta):
@@ -29,7 +21,7 @@ class TorchOnnxMeta(abc.ABCMeta):
             raise ImportError(
                 "Must have torch installed to use TorchOnnx export platform"
             )
-        return torch.nn.Module
+        return (torch.nn.Module, torch.jit.ScriptModule)
 
     @property
     def platform(self):
@@ -63,14 +55,9 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             # generate an input array of random data
             input_tensors[input.name] = self._get_tensor(input.dims)
 
-        # parse script module to figure out in which order
-        # to pass input tensors to the model_fn
-        if isinstance(model_fn, torch.jit.ScriptModule):
-            parameters = get_input_names_from_script_module(model_fn)
-        # otherwise use function signature from module.forward
-        else:
-            signature = inspect.signature(model_fn.forward)
-            parameters = OrderedDict(signature.parameters)
+        # parse either a `ScriptModule` or `torch.nn.Module`
+        # to figure out in which order to pass input tensors to the model_fn
+        parameters = get_input_names_from_torch_object(model_fn)
 
         # make sure the number of inputs to
         # the model_fn matches the number of
