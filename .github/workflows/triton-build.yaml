@@ -46,6 +46,8 @@ jobs:
           triton-tag: 22.07
         - trt-version: 8.5.1
           triton-tag: 22.12
+        - trt-version: 24.01
+          triton-tag: 8.6.1.6
     steps:
     -
       name: Checkout
