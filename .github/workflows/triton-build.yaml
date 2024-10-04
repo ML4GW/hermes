@@ -9,14 +9,6 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  free-disk-space:
-    runs-on: ubuntu-latest
-    steps:
-
-    - name: Free Disk Space (Ubuntu)
-      uses: jlumbroso/free-disk-space@main
-      with:
-        tool-cache: false
 
   # only run this workflow if changes have been
   # made to the triton Dockerfile or to this workflow,
@@ -58,6 +50,10 @@ jobs:
         - trt-version: 8.6.1.6
           triton-tag: 24.01
     steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: false
     -
       name: Checkout
       uses: actions/checkout@v2
