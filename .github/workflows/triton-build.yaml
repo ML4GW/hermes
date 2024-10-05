@@ -49,6 +49,8 @@ jobs:
           triton-tag: 22.12
         - trt-version: 8.6.1.6
           triton-tag: 24.01
+        - trt-version: 8.5.2.2
+          triton-tag: 23.01
     steps:
     - name: Free Disk Space (Ubuntu)
       uses: jlumbroso/free-disk-space@main
