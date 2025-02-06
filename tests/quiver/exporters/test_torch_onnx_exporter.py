@@ -6,8 +6,13 @@ from hermes.quiver import Model, Platform
 from hermes.quiver.exporters import TorchOnnx
 
 
+@pytest.fixture(params=[True, False])
+def dynamo(request):
+    return request.param
+
+
 @pytest.mark.torch
-def test_torch_onnx_exporter(temp_local_repo, torch_model):
+def test_torch_onnx_exporter(temp_local_repo, torch_model, dynamo):
     model_fn = torch_model
 
     model = Model("identity", temp_local_repo, Platform.ONNX)
@@ -34,7 +39,7 @@ def test_torch_onnx_exporter(temp_local_repo, torch_model):
     version_path = temp_local_repo.fs.join("identity", "1")
     temp_local_repo.fs.soft_makedirs(version_path)
     output_path = temp_local_repo.fs.join(version_path, "model.onnx")
-    exporter.export(model_fn, output_path)
+    exporter.export(model_fn, output_path, dynamo=dynamo)
     # TODO: include onnx as dev dependency for checking
 
     # now test using list-style input passing
