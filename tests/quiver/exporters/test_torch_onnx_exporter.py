@@ -72,5 +72,6 @@ def test_torch_onnx_exporter_with_kwargs(temp_local_repo, torch_model):
             input_names=ANY,
             output_names=ANY,
             dynamic_axes=ANY,
+            dynamo=ANY,
             opset_version=11,
         )
