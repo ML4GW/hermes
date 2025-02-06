@@ -78,6 +78,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
         output_names: Optional[Sequence[str]] = None,
         use_fp16: bool = False,
         endpoint: Optional[str] = None,
+        dynamo: Optional[bool] = False,
     ):
         if endpoint is None and not _has_trt:
             raise ImportError(
@@ -147,6 +148,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
                     version=version,
                     input_shapes=input_shapes,
                     output_names=output_names,
+                    dynamo=dynamo,
                 )
                 onnx_path = repo.fs.join(d, onnx_path)
                 with open(onnx_path, "rb") as f:

@@ -1,4 +1,5 @@
 import abc
+import tempfile
 from collections import OrderedDict
 from io import BytesIO
 
@@ -115,11 +116,13 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             shapes = {name: shape for name, shape in zip(output_names, shapes)}
         return shapes
 
-    def export(self, model_fn, export_path, verbose=0, **kwargs):
-        inputs, dynamic_axes = [], {}
+    def export(self, model_fn, export_path, verbose=0, dynamo=False, **kwargs):
+        inputs, dynamic_axes, dynamic_shapes = [], {}, {}
         for input in self.config.input:
             if input.dims[0] == -1:
+                batch = torch.export.Dim("batch")
                 dynamic_axes[input.name] = {0: "batch"}
+                dynamic_shapes[input.name] = {0: batch}
             inputs.append(self._get_tensor(input.dims))
 
         if len(dynamic_axes) > 0:
@@ -133,16 +136,23 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
 
         # export to a BytesIO object so that we
         # can copy the bytes to cloud filesystems
-        export_obj = BytesIO()
-        torch.onnx.export(
-            model_fn,
-            inputs,
-            export_obj,
-            input_names=[x.name for x in self.config.input],
-            output_names=[x.name for x in self.config.output],
-            dynamic_axes=dynamic_axes or None,
-            **kwargs
-        )
+        # export_obj = BytesIO()
+        with tempfile.NamedTemporaryFile() as tmp:
+            if dynamo:
+                kwargs["dynamic_shapes"] = dynamic_shapes
+            else:
+                kwargs["dynamic_axes"] = dynamic_axes
+            torch.onnx.export(
+                model_fn,
+                inputs,
+                tmp.name,
+                input_names=[x.name for x in self.config.input],
+                output_names=[x.name for x in self.config.output],
+                dynamo=dynamo,
+                **kwargs
+            )
+
+            export_obj = BytesIO(tmp.read())
 
         # write the written bytes and return
         # the path to which they were written
