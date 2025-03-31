@@ -64,13 +64,15 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
         timeout: Optional[float] = None,
         log_interval: float = 10,
     ) -> None:
-        client = triton.InferenceServerClient(endpoint)
         logging.info("Waiting for server to come online")
 
         timer = Timer(timeout, log_interval)
         live = False
         while timer.tick():
             try:
+                # Re-define the client on each loop
+                # See https://github.com/ML4GW/hermes/issues/71
+                client = triton.InferenceServerClient(endpoint)
                 live = client.is_server_live()
             except triton.InferenceServerException:
                 pass
