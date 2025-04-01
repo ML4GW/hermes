@@ -68,7 +68,7 @@ def find_exporter(
 
 
 def get_input_names_from_torch_object(
-    model_fn: Union["torch.nn.Module", "torch.jit.ScriptModule"]
+    model_fn: Union["torch.nn.Module", "torch.jit.ScriptModule"],
 ):
     """
     Parse either a torch.nn.Module or torch.ScriptModule for input names

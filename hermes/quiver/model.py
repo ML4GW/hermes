@@ -298,12 +298,12 @@ class EnsembleModel(Model):
         # dependency of the library
         try:
             from hermes.quiver.streaming import make_streaming_input_model
-        except ImportError as e:
-            if "torch" in str(e):
+        except ImportError as exc:
+            if "torch" in str(exc):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
                     "must install PyTorch first"
-                )
+                ) from exc
             raise
 
         # add a streaming model to the repository
@@ -357,12 +357,12 @@ class EnsembleModel(Model):
         # dependency of the library
         try:
             from hermes.quiver.streaming import make_streaming_output_model
-        except ImportError as e:
-            if "torch" in str(e):
+        except ImportError as exc:
+            if "torch" in str(exc):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
                     "must install PyTorch first"
-                )
+                ) from exc
             raise
 
         streaming_model = make_streaming_output_model(

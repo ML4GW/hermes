@@ -66,17 +66,17 @@ def _check_ready(
             logging.info(f"Attempting to load model {model_name}")
             client.load_model(model_name)
             logging.info(f"Model {model_name} loaded")
-        except InferenceServerException as e:
+        except InferenceServerException as exc:
             # catch an exeption indicating that Triton doesn't
             # have explicit control mode on, and raise it
             # more explicitly
-            if str(e).endswith("polling is enabled"):
+            if str(exc).endswith("polling is enabled"):
                 raise RuntimeError(
                     "Model {}, version {} isn't ready on server "
                     "and explicit model control not enabled".format(
                         model_name, model_version
                     )
-                )
+                ) from exc
             else:
                 raise
 
@@ -139,8 +139,10 @@ class InferenceClient:
         try:
             if not client.is_server_live():
                 raise RuntimeError(f"Server at url {address} isn't live")
-        except triton.InferenceServerException:
-            raise RuntimeError(f"Couldn't connect to server at {address}")
+        except triton.InferenceServerException as exc:
+            raise RuntimeError(
+                f"Couldn't connect to server at {address}"
+            ) from exc
         self.client = client
         self.address = address
 
@@ -473,8 +475,8 @@ class InferenceClient:
             name = input.name()
             try:
                 value = x[name]
-            except KeyError:
-                raise ValueError(f"Missing input {name}")
+            except KeyError as exc:
+                raise ValueError(f"Missing input {name}") from exc
 
             # TODO: Should pad inputs with batches smaller than
             # batch size, and record it somewhere for
@@ -494,8 +496,8 @@ class InferenceClient:
             for name, shape in channel_map.items():
                 try:
                     value = x[name]
-                except KeyError:
-                    raise ValueError(f"Missing state {name}")
+                except KeyError as exc:
+                    raise ValueError(f"Missing state {name}") from exc
 
                 # sometimes we can have a batched state, in which
                 # case don't append a batch dimension

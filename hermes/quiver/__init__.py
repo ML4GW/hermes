@@ -1,5 +1,5 @@
 """
-    isort:skip_file
+isort:skip_file
 """
 
 # skip isorting since platform needs to come first

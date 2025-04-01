@@ -42,8 +42,9 @@ class Timer:
         elapsed = time.time() - self._start_time
         if elapsed >= self.current_interval:
             logging.debug(
-                "Still waiting for server to start, "
-                "{}s elapsed".format(self.current_interval)
+                "Still waiting for server to start, {}s elapsed".format(
+                    self.current_interval
+                )
             )
             self._i += 1
         return elapsed < self.timeout
@@ -63,12 +64,12 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
         while timer.tick():
             try:
                 live = client.is_server_live()
+                if live:
+                    break
             except triton.InferenceServerException:
                 pass
             finally:
-                if live:
-                    break
-
+                # Either live is False or we raised an exception, so
                 # the server isn't available yet for some reason
                 try:
                     # check if self._thread has finished executing
@@ -203,13 +204,13 @@ def serve(
             for gpu in gpus:
                 try:
                     gpu = host_visible_gpus[gpu]
-                except IndexError:
+                except IndexError as exc:
                     raise ValueError(
                         "GPU index {} too large for host environment "
                         "with only {} available GPUs".format(
                             gpu, len(host_visible_gpus)
                         )
-                    )
+                    ) from exc
                 mapped_gpus.append(gpu)
             gpus = mapped_gpus
 

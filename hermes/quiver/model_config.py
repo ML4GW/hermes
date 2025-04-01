@@ -42,9 +42,7 @@ def _add_exposed_tensor(f):
                 representing variable-length axes
             dtype:
                 The datatype of the {exposed}
-        """.format(
-            exposed=exposed_type
-        )
+        """.format(exposed=exposed_type)
 
         # TODO: Handle datatypes more robustly
         if dtype == "float32":
@@ -192,16 +190,16 @@ class ModelConfig:
             kind = model_config.ModelInstanceGroup.Kind.Value(
                 "KIND_{}".format(kind.upper())
             )
-        except ValueError:
+        except ValueError as exc:
             raise ValueError(
                 f"Could not understand instance group kind {kind}, "
                 "must be one of auto, gpu, cpu"
-            )
+            ) from exc
 
         if isinstance(gpus, int):
             if gpus < 1:
                 raise ValueError(f"Invalid number of gpus specified {gpus}")
-            gpus = [i for i in range(gpus)]
+            gpus = list(range(gpus))
 
         # intialize a new instance group
         instance_group = model_config.ModelInstanceGroup(
@@ -216,21 +214,22 @@ class ModelConfig:
     ) -> model_config.ModelInstanceGroup:
         if len(self.instance_group) == 0:
             raise ValueError(
-                "Config for model {} has no instance groups "
-                "to scale".format(self.name)
+                "Config for model {} has no instance groups to scale".format(
+                    self.name
+                )
             )
 
         if name is None or isinstance(name, int):
             name = name or 0
             try:
                 group = self.instance_group[name]
-            except IndexError:
+            except IndexError as exc:
                 raise IndexError(
                     "Config for model {} with {} instance groups "
                     "has no instance group at index {}".format(
                         self.name, len(self.instance_group), name
                     )
-                )
+                ) from exc
         elif isinstance(name, str):
             groups = [g.name for g in self.instance_group if g.name == name]
             if len(groups) == 0:

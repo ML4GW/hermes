@@ -54,7 +54,7 @@ def _convert_network(
             # this input doesn't have a variable
             # length batch dimension, so move on
             continue
-        elif any([i is None for i in input.dims[1:]]):
+        elif any(i is None for i in input.dims[1:]):
             # otherwise if we specified another dim to
             # be variable, we can't support this at the
             # moment so raise an error

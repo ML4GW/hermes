@@ -106,13 +106,13 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # if any of the inputs have a variable length batch
         # dimension, then each output should have a variable
         # length batch dimension too
-        if any([x.dims[0] == -1 for x in self.config.input]):
+        if any(x.dims[0] == -1 for x in self.config.input):
             shapes = [(None,) + s[1:] for s in shapes]
 
         # if we provided names for the outputs, return them
         # as a dict for validation against the config
         if output_names is not None:
-            shapes = {name: shape for name, shape in zip(output_names, shapes)}
+            shapes = dict(zip(output_names, shapes))
         return shapes
 
     def export(self, model_fn, export_path, verbose=0, **kwargs):
@@ -141,7 +141,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             input_names=[x.name for x in self.config.input],
             output_names=[x.name for x in self.config.output],
             dynamic_axes=dynamic_axes or None,
-            **kwargs
+            **kwargs,
         )
 
         # write the written bytes and return
