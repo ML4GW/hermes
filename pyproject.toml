@@ -1,66 +1,69 @@
-[tool.poetry]
+[project]
 name = "ml4gw-hermes"
 version = "0.2.0"
 description = "Inference-as-a-Service deployment made simple"
 authors = [
-    "Alec Gunny <alec.gunny@ligo.org>",
-    "Ethan Marx <emarx@mit.edu>"
+    { name = "Alec Gunny", email = "alec.gunny@ligo.org" },
+    { name = "Ethan Marx", email = "emarx@mit.edu" },
 ]
-packages = [
-    {include = "hermes"}
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "tritonclient[all]~=2.22",
+    "numpy~=1.22",
+    "spython>=0.2,<0.3",
+    "tblib~=1.7",
+    "protobuf~=3.17",
+    "requests>=2.26.0,<3",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.13"
-tritonclient = {extras = ["all"], version = "^2.22"}
+[project.optional-dependencies]
+tensorflow = [
+    "tensorflow<2.17",
+    "tf-keras>=2.16,<2.17",
+]
+torch = [
+    "torch~=2.0",
+    "onnx>=1.15.0,<2",
+    "urllib3~=1.26",
+]
+gcs = ["google-cloud-storage~=1.38"]
+tensorrt = ["nvidia-tensorrt~=8.0"]
 
-# aeriel.client
-numpy = {version = "^1.22", optional = true}
+[dependency-groups]
+dev = [
+    "pre-commit~=2.16",
+    "pytest~=6.2",
+    "pytest-depends~=1.0",
+    "tox>=4.12.1,<5",
+]
+docs = [
+    "sphinx~=4.1",
+    "sphinx-material>=0.0.34,<0.0.35",
+]
 
-# aeriel.serve
-spython = {version = "^0.2", optional = true}
+[tool.uv]
+default-groups = [
+    "dev",
+    "docs",
+]
 
-# aeriel.monitor
-tblib = "^1.7"
-urllib3 = "^1.26"
+[tool.uv.sources]
+tensorrt = { index = "ngc" }
 
-# quiver
-protobuf = "^3.17"
-requests = "^2.26.0"
-
-# quiver optional dependencies
-tensorflow = {version = "<2.17", optional = true}
-tf-keras = {version = "~2.16", optional = true}
-torch = {version = "^2.0", optional = true}
-google-cloud-storage = {version = "^1.38", optional = true }
-nvidia-tensorrt = { version = "^8.0", optional = true, source = "ngc" }
-onnx = {version = "^1.15.0", optional = true}
-
-[tool.poetry.extras]
-# quiver 
-tensorflow = ["tensorflow", "tf-keras"]
-torch = ["torch", "onnx", "urllib3"]
-gcs = ["google-cloud-storage"]
-tensorrt = ["nvidia-tensorrt"]
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^2.16"
-pytest = "^6.2"
-pytest-depends = "^1.0"
-tox = "^4.12.1"
-
-[tool.poetry.group.docs.dependencies]
-sphinx = "^4.1"
-sphinx-material = "^0.0.34"
-
-[[tool.poetry.source]]
+[[tool.uv.index]]
 name = "ngc"
 url = "https://pypi.ngc.nvidia.com"
-priority = "primary"
+explicit = true
 
-[[tool.poetry.source]]
-name = "PyPI"
-priority = "primary"
+[tool.hatch.build.targets.sdist]
+include = ["hermes"]
+
+[tool.hatch.build.targets.wheel]
+include = ["hermes"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 markers = [
@@ -69,24 +72,17 @@ markers = [
     "gcs: tests that utilize Google Cloud Storage file system"
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 79
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.tox
-  | _build
-  | dist
-  | docs
-)/
-'''
+extend-exclude = ["docs"]
 
-[tool.isort]
-known_first_party = ["hermes"]
-multi_line_output = 3
-include_trailing_comma = true
+[tool.ruff.lint]
+extend-safe-fixes = ["C408"]
+mccabe = {"max-complexity" = 18}
+select = ["B", "C", "E", "F", "W", "B9"]
+# ignore W605 and E203 for consistency with black
+ignore = ["W605", "E203"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+# ignore asterisk imports and unused
+# import errors in __init__ files
+per-file-ignores =  {"**/__init__.py" = ["F401", "F403"]}
