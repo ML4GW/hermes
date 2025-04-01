@@ -21,9 +21,9 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     -
-      uses: dorny/paths-filter@v2
+      uses: dorny/paths-filter@v3
       id: filter
       with:
         filters: |
@@ -58,7 +58,7 @@ jobs:
         tool-cache: false
     -
       name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     -
       name: Log in to container registry
       uses: docker/login-action@master
