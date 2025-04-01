@@ -89,7 +89,7 @@ class Exporter(metaclass=abc.ABCMeta):
                 # beyond the batch dimension are valid
                 # TODO: support variable length axes beyond
                 # just the batch dimension
-                if any([i is None for i in shape[1:]]):
+                if any(i is None for i in shape[1:]):
                     raise ValueError(
                         "Shape {} has variable length axes outside "
                         "of the first dimension. This isn't allowed "
@@ -113,9 +113,9 @@ class Exporter(metaclass=abc.ABCMeta):
                     x.name: shape for x, shape in zip(exposed, provided)
                 }
 
-            if len(provided) != len(exposed) or set(provided) != set(
-                [x.name for x in exposed]
-            ):
+            if len(provided) != len(exposed) or set(provided) != {
+                x.name for x in exposed
+            }:
                 raise ValueError(
                     "Provided {exposed_type}s {provided} "
                     "don't match config {exposed_type}s {config}".format(
@@ -254,20 +254,20 @@ class Exporter(metaclass=abc.ABCMeta):
     def handles(self):
         try:
             return type(self).handles
-        except AttributeError:
+        except AttributeError as exc:
             raise NotImplementedError(
                 "Platform metaclass has no `handles` property"
-            )
+            ) from exc
 
     @property
     @abc.abstractmethod
     def platform(self) -> "Platform":
         try:
             return type(self).platform
-        except AttributeError:
+        except AttributeError as exc:
             raise NotImplementedError(
                 "Platform metaclass has no `platform` property"
-            )
+            ) from exc
 
     @abc.abstractmethod
     def export(self, model_fn, export_path, verbose=0, **kwargs):

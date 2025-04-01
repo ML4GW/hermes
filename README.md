@@ -67,10 +67,10 @@ Consult the function's documentation for information about other configuration a
 This function is not suitable for at-scale deployment, but is useful for running self-contained inference scripts for e.g. local model validation.
 
 ## Installation
-Hermes is pip installable via `pip install ml4gw-hermes`. Hermes is also fully compatible with [Poetry](https://python-poetry.org) for ease of use as a git submodule.
+Hermes is pip installable via `pip install ml4gw-hermes`. Hermes is also fully compatible with [uv](https://docs.astral.sh/uv/) for ease of use as a git submodule.
 
 
 ## Stability and Development
 Hermes is still very much a work in progress, but the fastest path towards making it more robust is broader adoption! To that end, we warn users that they may experience bugs as they deploy Hermes to new and novel problems, and encourage them to file [issues](/../../issues) on this page and if they can, consider contributing a [PR](https://github.com/ML4GW/hermes/pulls) to fix whatever bug they stumbled upon!
 
-Development of Hermes requires Poetry for managing and testing individual submodules. Moreover, it's highly encouraged to `poetry install` the root project, then run `poetry run pre-commit install --all` to install pre-commit hooks for style checking and static linting. For more information, see our [contribution guidelines](./CONTRIBUTING.md)
+Development of Hermes requires uv for managing and testing individual submodules. Moreover, it's highly encouraged to `uv sync` the root project, then run `uv run pre-commit install --all` to install pre-commit hooks for style checking and static linting. For more information, see our [contribution guidelines](./CONTRIBUTING.md)

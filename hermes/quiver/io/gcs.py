@@ -34,12 +34,12 @@ class GCSFileSystem(FileSystem):
         else:
             try:
                 self.client = storage.Client()
-            except DefaultCredentialsError:
+            except DefaultCredentialsError as exc:
                 raise ValueError(
                     "Must specify service account json file "
                     "via the `GOOGLE_APPLICATION_CREDENTIALS` "
                     "environment variable to use a GCSFileSystem"
-                )
+                ) from exc
 
         # split the bucket name from the rest
         # of the path, if one was specified
@@ -63,13 +63,13 @@ class GCSFileSystem(FileSystem):
             # name collisions because this would have
             # raised `Forbidden` rather than `NotFound`
             self.bucket = self.client.create_bucket(bucket_name)
-        except Forbidden:
+        except Forbidden as exc:
             # bucket already exists but the given
             # credentials are insufficient to access it
             raise ValueError(
                 "Provided credentials are unable to access "
                 f"GCS bucket with name {bucket_name}"
-            )
+            ) from exc
 
     def soft_makedirs(self, path: str):
         """
@@ -129,7 +129,7 @@ class GCSFileSystem(FileSystem):
                 fs.append(name)
 
         # sort everything and return
-        return sorted(list(dirs)) + sorted(fs)
+        return sorted(dirs) + sorted(fs)
 
     def glob(self, path: str):
         postfix = None

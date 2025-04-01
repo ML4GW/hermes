@@ -33,20 +33,29 @@ class Timer:
         self.log_interval = log_interval
         self._start_time = time.time()
         self._i = 1
+        self._stopped = False
 
     @property
     def current_interval(self):
         return self._i * self.log_interval
 
+    @property
+    def stopped(self):
+        return self._stopped
+
+    def stop(self):
+        self._stopped = True
+
     def tick(self):
         elapsed = time.time() - self._start_time
         if elapsed >= self.current_interval:
             logging.debug(
-                "Still waiting for server to start, "
-                "{}s elapsed".format(self.current_interval)
+                "Still waiting for server to start, {}s elapsed".format(
+                    self.current_interval
+                )
             )
             self._i += 1
-        return elapsed < self.timeout
+        return elapsed < self.timeout and not self._stopped
 
 
 def get_wait(q: Queue, log_file: Optional[str] = None):
@@ -67,30 +76,32 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
                 pass
             finally:
                 if live:
-                    break
+                    timer.stop()
+                else:
+                    # Either live is False or we raised an exception, so
+                    # the server isn't available yet for some reason
+                    try:
+                        # check if self._thread has finished executing
+                        # and placed the response in the _response_queue.
+                        # If so, something has gone wrong
+                        response = q.get_nowait()
+                        if log_file is not None and os.path.exists(log_file):
+                            with open(log_file, "r") as f:
+                                response["message"] += "\n" + f.read()
 
-                # the server isn't available yet for some reason
-                try:
-                    # check if self._thread has finished executing
-                    # and placed the response in the _response_queue.
-                    # If so, something has gone wrong
-                    response = q.get_nowait()
-                    if log_file is not None and os.path.exists(log_file):
-                        with open(log_file, "r") as f:
-                            response["message"] += "\n" + f.read()
-
-                    raise ValueError(
-                        "Server failed to start with return code "
-                        "{return_code} and message:\n{message}".format(
-                            **response
+                        raise ValueError(
+                            "Server failed to start with return code "
+                            "{return_code} and message:\n{message}".format(
+                                **response
+                            )
                         )
-                    )
-                except Empty:
-                    # otherwise we're still just waiting for the
-                    # server to come online, so keep waiting
-                    continue
-        else:
-            # the loop above never broke, so we must have timed out
+                    except Empty:
+                        # otherwise we're still just waiting for the
+                        # server to come online, so keep waiting
+                        continue
+        if not timer.stopped:
+            # the loop above finished without stopping the timer,
+            # so we must have timed out
             # TODO: is there a more specific TimeoutError we can call
             raise RuntimeError(f"Server still not online after {timeout}s")
         logging.info("Server online")
@@ -203,13 +214,13 @@ def serve(
             for gpu in gpus:
                 try:
                     gpu = host_visible_gpus[gpu]
-                except IndexError:
+                except IndexError as exc:
                     raise ValueError(
                         "GPU index {} too large for host environment "
                         "with only {} available GPUs".format(
                             gpu, len(host_visible_gpus)
                         )
-                    )
+                    ) from exc
                 mapped_gpus.append(gpu)
             gpus = mapped_gpus
 

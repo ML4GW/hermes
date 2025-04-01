@@ -193,12 +193,12 @@ class ServerMonitor(PipelineProcess):
         for model, version in zip(self.models, self.versions):
             try:
                 model_tracker = tracker[model]
-            except KeyError:
+            except KeyError as exc:
                 raise ValueError(
                     "Tracker for models {} can't track model {}".format(
                         ",".join(list(tracker)), model
                     )
-                )
+                ) from exc
 
             # for each model, first find out how many times
             # that model was executed on each GPU

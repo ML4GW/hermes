@@ -43,7 +43,8 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
                 "ordering for tensor input names. Be careful. See "
                 "https://docs.nvidia.com/deeplearning/triton-inference-server/"
                 "user-guide/docs/user_guide/model_configuration.html"
-                "#special-conventions-for-pytorch-backend"
+                "#special-conventions-for-pytorch-backend",
+                stacklevel=2,
             )
             return super().__call__(
                 model_fn, version, input_shapes, output_names
@@ -52,7 +53,7 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
         # use tritons recommended naming conventions
         # by inferring the names from the model_fn
         parameters = get_input_names_from_torch_object(model_fn)
-        input_shapes = {p: s for p, s in zip(parameters, input_shapes)}
+        input_shapes = dict(zip(parameters, input_shapes))
         super().__call__(model_fn, version, input_shapes, output_names)
 
     def _get_tensor(self, shape):
@@ -132,7 +133,7 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
         # if any of the inputs have a variable length batch
         # dimension, then each output should have a variable
         # length batch dimension too
-        if any([x.dims[0] == -1 for x in self.config.input]):
+        if any(x.dims[0] == -1 for x in self.config.input):
             shapes = [(None,) + s[1:] for s in shapes]
 
         # if we didn't provide names for the outputs,
@@ -145,7 +146,8 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
                 "and ordering for tensor output names. Be careful. See "
                 "https://docs.nvidia.com/deeplearning/triton-inference-server/"
                 "user-guide/docs/user_guide/model_configuration.html"
-                "#special-conventions-for-pytorch-backend"
+                "#special-conventions-for-pytorch-backend",
+                stacklevel=2,
             )
             shapes = {
                 name: shape
