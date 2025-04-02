@@ -1,6 +1,6 @@
 [project]
 name = "ml4gw-hermes"
-version = "0.2.0"
+version = "0.2.1"
 description = "Inference-as-a-Service deployment made simple"
 authors = [
     { name = "Alec Gunny", email = "alec.gunny@ligo.org" },
