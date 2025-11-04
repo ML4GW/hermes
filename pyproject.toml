@@ -1,6 +1,6 @@
 [project]
 name = "ml4gw-hermes"
-version = "0.2.1"
+dynamic = ["version"]
 description = "Inference-as-a-Service deployment made simple"
 authors = [
     { name = "Alec Gunny", email = "alec.gunny@ligo.org" },
@@ -56,15 +56,16 @@ name = "ngc"
 url = "https://pypi.ngc.nvidia.com"
 explicit = true
 
-[tool.hatch.build.targets.sdist]
-include = ["hermes"]
-
-[tool.hatch.build.targets.wheel]
-include = ["hermes"]
-
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = [ "setuptools>=77.0.3", "wheel", "setuptools-git-versioning>=2.0,<3",]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["hermes"]
+
+[tool.setuptools-git-versioning]
+enabled = true
+dev_template = "{tag}.post{ccount}+git.{sha}"
 
 [tool.pytest.ini_options]
 markers = [
