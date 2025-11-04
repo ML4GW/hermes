@@ -25,6 +25,7 @@ torch = [
     "torch~=2.0",
     "onnx>=1.15.0,<2",
     "urllib3~=1.26",
+    "onnxscript",
 ]
 gcs = ["google-cloud-storage~=1.38"]
 tensorrt = ["nvidia-tensorrt~=8.0"]
