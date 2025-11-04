@@ -60,8 +60,8 @@ explicit = true
 requires = [ "setuptools>=77.0.3", "wheel", "setuptools-git-versioning>=2.0,<3",]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["hermes"]
+[tool.setuptools.packages.find]
+include = ["hermes*"]
 
 [tool.setuptools-git-versioning]
 enabled = true
