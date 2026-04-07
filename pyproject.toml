@@ -6,7 +6,7 @@ authors = [
     { name = "Alec Gunny", email = "alec.gunny@ligo.org" },
     { name = "Ethan Marx", email = "emarx@mit.edu" },
 ]
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "tritonclient[all]~=2.22",
     "numpy~=1.22",
