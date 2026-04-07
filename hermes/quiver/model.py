@@ -330,7 +330,9 @@ class EnsembleModel(Model):
         # the channel axis each one of these lies
         metadata = []
         outputs = streaming_model.outputs
-        for tensor, output in zip(inputs, streaming_model.config.output):
+        for tensor, output in zip(
+            inputs, streaming_model.config.output, strict=True
+        ):
             self.pipe(outputs[output.name], tensor)
             metadata.append(f"{tensor.model.name}/{tensor.name}")
         self.config.parameters["states"].string_value = ",".join(metadata)
@@ -387,7 +389,7 @@ class EnsembleModel(Model):
         key: Optional[str] = None,
     ) -> None:
         # verify that we're connecting tensors of the same shape
-        for dim1, dim2 in zip(outbound.shape, inbound.shape):
+        for dim1, dim2 in zip(outbound.shape, inbound.shape, strict=True):
             if dim1 != dim2 and not (dim1 is None or dim2 is None):
                 raise ValueError(
                     f"Outbound tensor has shape {outbound.shape} which "

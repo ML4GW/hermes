@@ -26,7 +26,7 @@ def add_streaming_model(
     state_outputs = ["output_" + i for i in state_names]
 
     inputs = [(input_name, input_shape)]
-    inputs.extend(zip(state_inputs, state_shapes))
+    inputs.extend(zip(state_inputs, state_shapes, strict=True))
     model.export_version(
         streaming_layer,
         input_shapes=OrderedDict(inputs),

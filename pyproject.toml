@@ -76,6 +76,7 @@ markers = [
 
 [tool.ruff]
 line-length = 79
+extend-include = ["T201"]
 extend-exclude = ["docs"]
 
 [tool.ruff.lint]

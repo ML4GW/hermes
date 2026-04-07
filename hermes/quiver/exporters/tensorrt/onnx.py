@@ -136,7 +136,7 @@ def _convert_network(
         # now iterate through each dimension and make
         # sure that any non-variable length dimensions
         # have the appropriate shape
-        for ndim, cdim in zip(network_output.shape, output.dims):
+        for ndim, cdim in zip(network_output.shape, output.dims, strict=True):
             if ndim != -1 and ndim != cdim:
                 raise ValueError(
                     "Shape mismatch for output {} between "

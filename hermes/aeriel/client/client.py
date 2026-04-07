@@ -200,7 +200,9 @@ class InferenceClient:
         # TODO: check for stateful outputs for enforcing a
         # sequence_id value in `InferenceClient.infer`
         states, inputs = [], []
-        for config_input, metadata_input in zip(config.input, metadata.inputs):
+        for config_input, metadata_input in zip(
+            config.input, metadata.inputs, strict=True
+        ):
             shape = [i if i > 0 else batch_size for i in metadata_input.shape]
             input = triton.InferInput(
                 name=metadata_input.name,
