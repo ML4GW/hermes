@@ -159,17 +159,17 @@ class ModelRepository:
         self._models.append(model)
         return model
 
-    def remove(self, model: str | Model):
+    def remove(self, model: str | Model) -> None:
         if isinstance(model, str):
             try:
-                model = [i for i in self._models if i.name == model][0]
-            except IndexError as exc:
-                raise ValueError(f"Unrecognized model {model}") from exc
+                model = next(i for i in self._models if i.name == model)
+            except StopIteration:
+                raise ValueError(f"Unrecognized model {model!r}") from None
 
         self._models.remove(model)
         self.fs.remove(model.name)
 
-    def delete(self):
+    def delete(self) -> None:
         for model in self._models:
             self.remove(model)
         self.fs.delete()

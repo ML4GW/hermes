@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from hermes.quiver.model import ExposedTensor
 
 
-def window(x: torch.Tensor, num_windows: int, stride: int):
+def window(x: torch.Tensor, num_windows: int, stride: int) -> torch.Tensor:
     if x.ndim == 2:
         num_channels = len(x)
         x = x.view(1, num_channels, 1, -1)

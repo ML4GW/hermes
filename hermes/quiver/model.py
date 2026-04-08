@@ -217,7 +217,7 @@ class EnsembleModel(Model):
 
     @property
     def models(self) -> list[Model]:
-        """Returns the models which this enesmble leverages for inference."""
+        """Returns the models which this ensemble leverages for inference."""
         return [
             self.repository.models[step.model_name]
             for step in self.config.ensemble_scheduling.step
@@ -399,7 +399,7 @@ class EnsembleModel(Model):
 
         # add the models associated with the
         # inbound and outbound tensors to the
-        # ensmble if they aren't in it yet
+        # ensemble if they aren't in it yet
         for tensor in [inbound, outbound]:
             if tensor.model not in self.models:
                 # TODO: support per-model versioning

@@ -73,8 +73,8 @@ def get_wait(q: Queue, log_file: str | None = None):
                 # See https://github.com/ML4GW/hermes/issues/71
                 client = triton.InferenceServerClient(endpoint)
                 live = client.is_server_live()
-            except triton.InferenceServerException:
-                pass
+            except triton.InferenceServerException as exc:
+                logging.debug("Connection attempt failed: %s", exc)
             finally:
                 if live:
                     timer.stop()

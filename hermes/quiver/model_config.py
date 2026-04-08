@@ -36,7 +36,10 @@ def _add_exposed_tensor(f):
         elif dtype == "int64":
             dtype = model_config.DataType.TYPE_INT64
         else:
-            raise ValueError(f"Unknown datatype {dtype}")
+            raise ValueError(
+                f"Unknown datatype {dtype}. "
+                "Expected either 'float32' or 'int64'."
+            )
 
         shape = tuple(x or -1 for x in shape)
         exposed_obj = output_type(
