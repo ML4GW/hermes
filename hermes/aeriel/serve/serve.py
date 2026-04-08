@@ -104,8 +104,7 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
         if not timer.stopped:
             # the loop above finished without stopping the timer,
             # so we must have timed out
-            # TODO: is there a more specific TimeoutError we can call
-            raise RuntimeError(f"Server still not online after {timeout}s")
+            raise TimeoutError(f"Server still not online after {timeout}s")
         logging.info("Server online")
 
     return wait

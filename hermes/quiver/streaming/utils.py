@@ -9,6 +9,8 @@ from hermes.quiver.platform import Platform
 if TYPE_CHECKING:
     from hermes.quiver import Model, ModelRepository
 
+_MAX_SEQUENCE_IDLE_MICROSECONDS = 10_000_000
+
 
 def add_streaming_model(
     repository: "ModelRepository",
@@ -55,7 +57,7 @@ def add_streaming_model(
         states.insert(0, state)
 
     sequence_batching = model_config.ModelSequenceBatching(
-        max_sequence_idle_microseconds=10000000,
+        max_sequence_idle_microseconds=_MAX_SEQUENCE_IDLE_MICROSECONDS,
         direct=model_config.ModelSequenceBatching.StrategyDirect(),
         state=states,
     )
