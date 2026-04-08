@@ -54,7 +54,6 @@ default-groups = [
 ]
 
 [tool.uv.sources]
-tensorrt = { index = "ngc" }
 
 [[tool.uv.index]]
 name = "ngc"

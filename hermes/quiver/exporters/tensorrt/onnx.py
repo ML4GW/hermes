@@ -6,6 +6,37 @@ import tensorrt as trt
 if TYPE_CHECKING:
     from tritonclient.grpc.model_config_pb2 import ModelConfig
 
+# Minimum GPU compute capability (SM × 10) supported per TRT major version.
+# TRT 10 dropped Volta (SM 7.0); earlier versions are more permissive.
+_TRT_MIN_SM = {8: 35, 9: 53, 10: 75}
+
+
+def _check_gpu_trt_compatibility() -> None:
+    """Raise a clear RuntimeError if the current GPU is not supported."""
+    try:
+        import torch
+    except ImportError:
+        return  # can't check without torch; TRT will surface its own error
+
+    if not torch.cuda.is_available():
+        return
+
+    major, minor = torch.cuda.get_device_capability()
+    sm = major * 10 + minor
+
+    trt_major = int(trt.__version__.split(".")[0])
+    min_sm = _TRT_MIN_SM.get(trt_major)
+    if min_sm is not None and sm < min_sm:
+        device = torch.cuda.get_device_name()
+        min_major, min_minor = divmod(min_sm, 10)
+        raise RuntimeError(
+            f"GPU '{device}' has compute capability SM {major}.{minor}, "
+            f"which is not supported by TensorRT {trt.__version__}. "
+            f"TensorRT {trt_major}.x requires SM {min_major}.{min_minor} "
+            f"or later. For Volta-class GPUs (V100), use an NVIDIA "
+            f"container that includes TensorRT 9.x."
+        )
+
 
 def convert_network(
     model_binary: str | bytes,
@@ -29,6 +60,7 @@ def _convert_network(
     """
     using a cheap wrapper to save myself some tabs
     """
+    _check_gpu_trt_compatibility()
 
     # do some TRT boilerplate initialization
     logger = trt.Logger()
