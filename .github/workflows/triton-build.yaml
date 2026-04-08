@@ -9,6 +9,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+
   # only run this workflow if changes have been
   # made to the triton Dockerfile or to this workflow,
   # which contain all the info that we need
@@ -20,9 +21,9 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     -
-      uses: dorny/paths-filter@v2
+      uses: dorny/paths-filter@v3
       id: filter
       with:
         filters: |
@@ -46,10 +47,18 @@ jobs:
           triton-tag: 22.07
         - trt-version: 8.5.1
           triton-tag: 22.12
+        - trt-version: 8.6.1.6
+          triton-tag: 24.01
+        - trt-version: 8.5.2.2
+          triton-tag: 23.01
     steps:
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: false
     -
       name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     -
       name: Log in to container registry
       uses: docker/login-action@master

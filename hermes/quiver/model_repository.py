@@ -73,11 +73,11 @@ class ModelRepository:
                 config = self.fs.read_config(
                     self.fs.join(model, "config.pbtxt")
                 )
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 raise ValueError(
                     "Failed to initialize repo at {} due to "
                     "model {} with missing config.".format(self.fs, model)
-                )
+                ) from exc
 
             # make sure the specified platform is legitimate
             # note that this is different than whether this is
@@ -86,13 +86,13 @@ class ModelRepository:
             # that this config specifies a real, Triton-accepted config
             try:
                 platform = Platform(config.platform)
-            except KeyError:
+            except KeyError as exc:
                 raise ValueError(
                     "Failed to initialize repo at {} due to "
                     "model {} with unknown platform {}.".format(
                         self.fs, model, config.platform
                     )
-                )
+                ) from exc
             self.add(model, platform)
 
     @property
@@ -165,8 +165,8 @@ class ModelRepository:
         if isinstance(model, str):
             try:
                 model = [i for i in self._models if i.name == model][0]
-            except IndexError:
-                raise ValueError(f"Unrecognized model {model}")
+            except IndexError as exc:
+                raise ValueError(f"Unrecognized model {model}") from exc
 
         self._models.remove(model)
         self.fs.remove(model.name)

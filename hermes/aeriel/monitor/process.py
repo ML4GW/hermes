@@ -76,7 +76,7 @@ class PipelineProcess(mp.Process):
             else:
                 if isinstance(item, ExceptionWrapper):
                     item.reraise()
-                elif item == StopIteration or isinstance(item, StopIteration):
+                elif item is StopIteration or isinstance(item, StopIteration):
                     raise StopIteration
                 return item
 
@@ -100,7 +100,6 @@ class PipelineProcess(mp.Process):
                 # it if there's anything to process
                 inputs = self.get_package()
                 if inputs is not None:
-
                     # try passing a starmap so that subclasses
                     # don't always have to return lists, but
                     # otherwise call the downstream process
@@ -218,6 +217,7 @@ class Pipeline:
             return Pipeline(processes)
         else:
             raise TypeError(
-                "Unsupported operand type(s) for >> "
-                "Pipeline and {}".format(type(child))
+                "Unsupported operand type(s) for >> Pipeline and {}".format(
+                    type(child)
+                )
             )

@@ -298,12 +298,12 @@ class EnsembleModel(Model):
         # dependency of the library
         try:
             from hermes.quiver.streaming import make_streaming_input_model
-        except ImportError as e:
-            if "torch" in str(e):
+        except ImportError as exc:
+            if "torch" in str(exc):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
                     "must install PyTorch first"
-                )
+                ) from exc
             raise
 
         # add a streaming model to the repository
@@ -330,7 +330,9 @@ class EnsembleModel(Model):
         # the channel axis each one of these lies
         metadata = []
         outputs = streaming_model.outputs
-        for tensor, output in zip(inputs, streaming_model.config.output):
+        for tensor, output in zip(
+            inputs, streaming_model.config.output, strict=True
+        ):
             self.pipe(outputs[output.name], tensor)
             metadata.append(f"{tensor.model.name}/{tensor.name}")
         self.config.parameters["states"].string_value = ",".join(metadata)
@@ -357,12 +359,12 @@ class EnsembleModel(Model):
         # dependency of the library
         try:
             from hermes.quiver.streaming import make_streaming_output_model
-        except ImportError as e:
-            if "torch" in str(e):
+        except ImportError as exc:
+            if "torch" in str(exc):
                 raise RuntimeError(
                     "Unable to leverage streaming input, "
                     "must install PyTorch first"
-                )
+                ) from exc
             raise
 
         streaming_model = make_streaming_output_model(
@@ -387,7 +389,7 @@ class EnsembleModel(Model):
         key: Optional[str] = None,
     ) -> None:
         # verify that we're connecting tensors of the same shape
-        for dim1, dim2 in zip(outbound.shape, inbound.shape):
+        for dim1, dim2 in zip(outbound.shape, inbound.shape, strict=True):
             if dim1 != dim2 and not (dim1 is None or dim2 is None):
                 raise ValueError(
                     f"Outbound tensor has shape {outbound.shape} which "

@@ -54,7 +54,7 @@ def _convert_network(
             # this input doesn't have a variable
             # length batch dimension, so move on
             continue
-        elif any([i is None for i in input.dims[1:]]):
+        elif any(i is None for i in input.dims[1:]):
             # otherwise if we specified another dim to
             # be variable, we can't support this at the
             # moment so raise an error
@@ -136,7 +136,7 @@ def _convert_network(
         # now iterate through each dimension and make
         # sure that any non-variable length dimensions
         # have the appropriate shape
-        for ndim, cdim in zip(network_output.shape, output.dims):
+        for ndim, cdim in zip(network_output.shape, output.dims, strict=True):
             if ndim != -1 and ndim != cdim:
                 raise ValueError(
                     "Shape mismatch for output {} between "
