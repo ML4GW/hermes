@@ -223,6 +223,13 @@ class EnsembleModel(Model):
             for step in self.config.ensemble_scheduling.step
         ]
 
+    def _find_step(self, model_name: str):
+        """Return the enemble scheduling step for the named model"""
+        for step in self.config.ensemble_scheduling.step:
+            if step.model_name == model_name:
+                return step
+        return None
+
     def _update_step_map(
         self,
         tensor: ExposedTensor,
@@ -231,10 +238,10 @@ class EnsembleModel(Model):
     ):
         """Updates the routing of data through the ensemble."""
 
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == tensor.model.name:
-                step_map = getattr(step, exposed_type + "_map")
-                step_map[tensor.name] = key
+        step = self._find_step(tensor.model.name)
+        if step is not None:
+            step_map = getattr(step, exposed_type + "_map")
+            step_map[tensor.name] = key
 
     def add_input(
         self,
@@ -407,9 +414,7 @@ class EnsembleModel(Model):
 
         # find the step in the config associated
         # with the outbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == outbound.model.name:
-                break
+        step = self._find_step(outbound.model.name)
 
         # check to see if this tensor has already been
         # associated with some named mapping.
@@ -437,9 +442,7 @@ class EnsembleModel(Model):
             key = existing_key
 
         # find the step associated with the inbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == inbound.model.name:
-                break
+        step = self._find_step(inbound.model.name)
 
         # check to see if this tensor has already been
         # given a key
