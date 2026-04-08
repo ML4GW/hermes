@@ -1,3 +1,4 @@
+import builtins
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +36,7 @@ class LocalFileSystem(FileSystem):
     def isdir(self, path: str) -> bool:
         return (self.root / path).isdir()
 
-    def list(self, path: str | None = None) -> list[str]:
+    def list(self, path: str | None = None) -> builtins.list[str]:
         target = self.root if path is None else self.root / path
         return [p.name for p in target.iterdir()]
 
