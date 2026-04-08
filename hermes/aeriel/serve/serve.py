@@ -91,10 +91,9 @@ def get_wait(q: Queue, log_file: str | None = None):
                                 response["message"] += "\n" + f.read()
 
                         raise ValueError(
-                            "Server failed to start with return code "
-                            "{return_code} and message:\n{message}".format(
-                                **response
-                            )
+                            f"Server failed to start with return code "
+                            f"{response['return_code']} and message:\n"
+                            f"{response['message']}"
                         )
                     except Empty:
                         # otherwise we're still just waiting for the

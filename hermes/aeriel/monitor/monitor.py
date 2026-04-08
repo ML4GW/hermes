@@ -163,17 +163,15 @@ class ServerMonitor(PipelineProcess):
             else:
                 if set(self.models) != set(models):
                     raise ValueError(
-                        "Model names {} on service at address {} "
-                        "don't match up with inferred names {}".format(
-                            ",".join(models), ip, ",".join(self.models)
-                        )
+                        f"Model names {','.join(models)} on service at "
+                        f"address {ip} don't match up with inferred "
+                        f"names {','.join(self.models)}"
                     )
                 elif set(self.versions) != set(versions):
                     raise ValueError(
-                        "Model versions {} on service at address {} "
-                        "don't match up with inferred names {}".format(
-                            ",".join(versions), ip, ",".join(self.versions)
-                        )
+                        f"Model versions {','.join(versions)} on service "
+                        f"at address {ip} don't match up with inferred "
+                        f"names {','.join(self.versions)}"
                     )
 
         super().__init__(**kwargs)
@@ -196,9 +194,8 @@ class ServerMonitor(PipelineProcess):
                 model_tracker = tracker[model]
             except KeyError as exc:
                 raise ValueError(
-                    "Tracker for models {} can't track model {}".format(
-                        ",".join(list(tracker)), model
-                    )
+                    f"Tracker for models {','.join(list(tracker))} "
+                    f"can't track model {model}"
                 ) from exc
 
             # for each model, first find out how many times
