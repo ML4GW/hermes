@@ -91,14 +91,21 @@ def test_online_averager(
     stop = start + update_size * batch_size
     validate_output(start, stop, 0, stream.cpu().numpy()[0])
 
-    # finally check that the snapshot values are as expected
-    # With a zero initial snapshot, each filled position has received
-    # exactly 1 of the num_updates needed contributions, so the
-    # stored partial sum equals value / num_updates.
+    # Finally check that the snapshot values are as expected.
+    # Position j receives N contributions of (stop + j) / num_updates,
+    # where N = min(batch_size, num_updates - 1 - j // update_size).
+    # The later indices are covered by fewer batch elements as the
+    # windows stop overlapping.
     filled = (num_updates - 1) * update_size
     if filled > 0:
+        indices = torch.arange(filled)
+        num_contributions = torch.clamp(
+            num_updates - 1 - indices // update_size,
+            max=batch_size,
+        ).float()
         expected_snap = (
-            torch.arange(stop, stop + filled, dtype=torch.float32)
+            num_contributions
+            * torch.arange(stop, stop + filled, dtype=torch.float32)
             / num_updates
         )
         if num_channels is None:
