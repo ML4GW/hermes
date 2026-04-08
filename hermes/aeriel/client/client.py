@@ -13,17 +13,12 @@ import random
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from copy import deepcopy
 from queue import Empty, Queue
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Union,
 )
 
 import numpy as np
@@ -34,7 +29,7 @@ if TYPE_CHECKING:
     from tritonclient.grpc.model_config_pb2 import InferInput
 
 
-SHAPE = Tuple[int, ...]
+SHAPE = tuple[int, ...]
 
 
 class ProfilerClock:
@@ -72,10 +67,8 @@ def _check_ready(
             # more explicitly
             if str(exc).endswith("polling is enabled"):
                 raise RuntimeError(
-                    "Model {}, version {} isn't ready on server "
-                    "and explicit model control not enabled".format(
-                        model_name, model_version
-                    )
+                    f"Model {model_name}, version {model_version} isn't ready "
+                    "on server and explicit model control not enabled"
                 ) from exc
             else:
                 raise
@@ -85,9 +78,7 @@ def _check_ready(
         # the desired version didn't get loaded with it,
         # so we're out of options here and need to bail
         raise RuntimeError(
-            "Model {} is available but not version {}".format(
-                model_name, model_version
-            )
+            f"Model {model_name} is available but not version {model_version}"
         )
 
 
@@ -131,7 +122,7 @@ class InferenceClient:
         model_name: str,
         model_version: int = -1,
         batch_size: int = 1,
-        callback: Optional[Callable] = None,
+        callback: Callable | None = None,
         profile: bool = False,
         **client_kwargs,
     ) -> None:
@@ -176,9 +167,9 @@ class InferenceClient:
 
     def _build_inputs(
         self, batch_size: int
-    ) -> Tuple[
-        List["InferInput"],
-        List[Tuple["InferInput", Dict[str, SHAPE]]],
+    ) -> tuple[
+        list["InferInput"],
+        list[tuple["InferInput", dict[str, SHAPE]]],
     ]:
         """Build Triton InferInputs for the inputs to the model
 
@@ -262,7 +253,7 @@ class InferenceClient:
 
         return inputs, states
 
-    def get(self, until_empty: bool = False) -> Union[Any, List[Any], None]:
+    def get(self, until_empty: bool = False) -> Any | list[Any] | None:
         """Check the if the callback thread has produced anything
 
         Makes a check to see if the callback thread has produced
@@ -347,8 +338,8 @@ class InferenceClient:
 
     def _validate_inputs(
         self,
-        x: Union[np.ndarray, Dict[str, np.ndarray]],
-        sequence_id: Optional[int] = None,
+        x: np.ndarray | dict[str, np.ndarray],
+        sequence_id: int | None = None,
     ):
         """
         Normalize an inference input and grab the gRPC
@@ -361,9 +352,8 @@ class InferenceClient:
             if len(self.inputs) + self.num_states > 1:
                 raise ValueError(
                     "Only passed a single input array, but "
-                    "model {} has {} inputs and {} states".format(
-                        self.model_name, len(self.inputs), len(self.states)
-                    )
+                    f"model {self.model_name} has {len(self.inputs)} inputs "
+                    f"and {len(self.states)} states"
                 )
             elif len(self.inputs) > 0:
                 # if we only have a non-stateful input, set `x`
@@ -383,14 +373,13 @@ class InferenceClient:
             # we do the same if there are any stateful outputs?
             # Or just states somewhere in the model in general?
             raise ValueError(
-                "Must provide sequence id for model with states {}".format(
-                    [i[0].name() for i in self.states]
-                )
+                "Must provide sequence id for model with states "
+                f"{[i[0].name() for i in self.states]}"
             )
         elif sequence_id is not None and self.num_states == 0:
             raise ValueError(
-                "Specified sequence id {} for request to "
-                "non-stateful model {}".format(sequence_id, self.model_name)
+                f"Specified sequence id {sequence_id} for request to "
+                f"non-stateful model {self.model_name}"
             )
         elif sequence_id is not None and sequence_id not in self._sequences:
             # this is a new sequence, so create a fresh set of inputs for it
@@ -412,9 +401,9 @@ class InferenceClient:
 
     def infer(
         self,
-        x: Union[np.ndarray, Dict[str, np.ndarray]],
-        request_id: Optional[int] = None,
-        sequence_id: Optional[int] = None,
+        x: np.ndarray | dict[str, np.ndarray],
+        request_id: int | None = None,
+        sequence_id: int | None = None,
         sequence_start: bool = False,
         sequence_end: bool = False,
     ) -> None:
@@ -592,9 +581,8 @@ class InferenceClient:
                 self.clock.tock(request_id, sequence_id)
 
             logging.debug(
-                "Received response for request {} from sequence {}".format(
-                    request_id, sequence_id
-                )
+                f"Received response for request {request_id} "
+                f"from sequence {sequence_id}"
             )
 
             # parse the numpy arrays from the response and

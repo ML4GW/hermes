@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 try:
     from google.api_core.exceptions import Forbidden, NotFound
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class GCSFileSystem(FileSystem):
-    credentials: Optional[str] = None
+    credentials: str | None = None
 
     def __post_init__(self):
         if not _has_google_libs:
@@ -83,7 +83,7 @@ class GCSFileSystem(FileSystem):
         for arg in args:
             if not isinstance(arg, str):
                 raise TypeError(
-                    "join() argument must be str, not {}".format(type(arg))
+                    f"join() argument must be str, not {type(arg)}"
                 )
         return "/".join(args)
 
@@ -99,7 +99,7 @@ class GCSFileSystem(FileSystem):
                 return True
         return False
 
-    def list(self, path: Optional[str] = None) -> List[str]:
+    def list(self, path: str | None = None) -> list[str]:
         if path is not None and self.root:
             # we specified a path, and we have a root,
             # so join them to make the prefix
@@ -201,7 +201,7 @@ class GCSFileSystem(FileSystem):
         else:
             raise TypeError(
                 "Expected object to be of type "
-                "str or bytes, found type {}".format(type(obj))
+                f"str or bytes, found type {type(obj)}"
             )
 
         blob.upload_from_string(obj, content_type=content_type)

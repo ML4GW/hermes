@@ -1,5 +1,5 @@
 import abc
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from hermes.quiver import Platform
 from hermes.quiver.exporters import Exporter
@@ -19,7 +19,7 @@ class Ensemble(Exporter, metaclass=EnsembleMeta):
     def _get_output_shapes(
         self,
         model_fn: type(None),
-        output_names: Optional[Sequence[str]] = None,
+        output_names: Sequence[str] | None = None,
     ):
         shapes = {x.name: list(x.dims) for x in self.config.output}
         return shapes or None

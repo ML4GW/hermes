@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -51,7 +51,7 @@ class OnlineAverager(torch.nn.Module):
         update_size: int,
         batch_size: int,
         num_updates: int,
-        num_channels: Optional[int] = None,
+        num_channels: int | None = None,
     ) -> None:
         super().__init__()
         self.update_size = update_size
@@ -91,7 +91,7 @@ class OnlineAverager(torch.nn.Module):
 
     def forward(
         self, update: torch.Tensor, snapshot: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # to keep things general, add a dummy dimension
         # to the update if it has no channel dimension
         if self.num_channels is None:
@@ -141,8 +141,8 @@ def make_streaming_output_model(
     input: "ExposedTensor",
     update_size: int,
     num_updates: int,
-    batch_size: Optional[int] = None,
-    name: Optional[str] = None,
+    batch_size: int | None = None,
+    name: str | None = None,
     streams_per_gpu: int = 1,
 ) -> "Model":
     if len(input.shape) == 3:
@@ -153,15 +153,13 @@ def make_streaming_output_model(
     else:
         raise ValueError(
             "Can't produce streaming output state for "
-            "tensor with {} dimensions".format(len(input.shape))
+            f"tensor with {len(input.shape)} dimensions"
         )
 
     if (num_updates * update_size) > kernel_size:
         raise ValueError(
-            "Not enough data for {} updates of length {} "
-            "in kernel of length {}".format(
-                num_updates, update_size, kernel_size
-            )
+            f"Not enough data for {num_updates} updates of length "
+            f"{update_size} in kernel of length {kernel_size}"
         )
 
     if batch_size is None and input_batch is None:
@@ -174,9 +172,8 @@ def make_streaming_output_model(
     elif input_batch is not None and input_batch != batch_size:
         raise ValueError(
             "Can't create streaming output model with batch size "
-            "of {} from input model with fixed batch size {}".format(
-                batch_size, input_batch
-            )
+            f"of {batch_size} from input model with fixed batch "
+            f"size {input_batch}"
         )
 
     averager = OnlineAverager(

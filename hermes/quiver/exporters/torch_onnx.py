@@ -64,10 +64,8 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # specified input tensors
         if len(parameters) != len(input_tensors):
             raise ValueError(
-                "Model function  expects {} inputs, but "
-                "model only expects {} inputs".format(
-                    len(parameters), len(input_tensors)
-                )
+                f"Model function  expects {len(parameters)} inputs, but "
+                f"model only expects {len(input_tensors)} inputs"
             )
 
         if len(parameters) == 1:

@@ -16,9 +16,7 @@ class LogListener(QueueListener):
 
     def add_process(self, process):
         pid = os.getpid()
-        logger = logging.getLogger(
-            "hermes.stillwater.{}.{}".format(process.name, pid)
-        )
+        logger = logging.getLogger(f"hermes.stillwater.{process.name}.{pid}")
         logger.addHandler(QueueHandler(self.queue))
         return logger
 

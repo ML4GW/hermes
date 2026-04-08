@@ -1,5 +1,6 @@
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import torch
 from tritonclient.grpc import model_config_pb2 as model_config
@@ -17,9 +18,9 @@ def add_streaming_model(
     streaming_layer: torch.nn.Module,
     name: str,
     input_name: str,
-    input_shape: Tuple[int, ...],
+    input_shape: tuple[int, ...],
     state_names: Sequence[str],
-    state_shapes: Sequence[Tuple[int, ...]],
+    state_shapes: Sequence[tuple[int, ...]],
     output_names: Sequence[str],
     streams_per_gpu: int,
 ) -> "Model":

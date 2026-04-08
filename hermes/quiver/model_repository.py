@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from hermes.quiver import Model, Platform, io
 from hermes.quiver.io.exceptions import NoFilesFoundError
@@ -39,7 +39,7 @@ class ModelRepository:
     """
 
     def __init__(
-        self, root: Union[str, Path], clean: bool = False, **kwargs: Any
+        self, root: str | Path, clean: bool = False, **kwargs: Any
     ) -> None:
         # initialize the filesystem backend for managing
         # reading/writing/path operations
@@ -75,8 +75,8 @@ class ModelRepository:
                 )
             except FileNotFoundError as exc:
                 raise ValueError(
-                    "Failed to initialize repo at {} due to "
-                    "model {} with missing config.".format(self.fs, model)
+                    f"Failed to initialize repo at {self.fs} due to "
+                    f"model {model} with missing config."
                 ) from exc
 
             # make sure the specified platform is legitimate
@@ -88,10 +88,8 @@ class ModelRepository:
                 platform = Platform(config.platform)
             except KeyError as exc:
                 raise ValueError(
-                    "Failed to initialize repo at {} due to "
-                    "model {} with unknown platform {}.".format(
-                        self.fs, model, config.platform
-                    )
+                    f"Failed to initialize repo at {self.fs} due to "
+                    f"model {model} with unknown platform {config.platform}."
                 ) from exc
             self.add(model, platform)
 
@@ -128,7 +126,7 @@ class ModelRepository:
         """
 
         if name in self.models and not force:
-            raise ValueError("Model {} already exists".format(name))
+            raise ValueError(f"Model {name} already exists")
         elif name in self.models:
             # append an index to the name of the model starting at 0
             pattern = re.compile(f"{name}_[0-9]+")
@@ -161,7 +159,7 @@ class ModelRepository:
         self._models.append(model)
         return model
 
-    def remove(self, model: Union[str, Model]):
+    def remove(self, model: str | Model):
         if isinstance(model, str):
             try:
                 model = [i for i in self._models if i.name == model][0]

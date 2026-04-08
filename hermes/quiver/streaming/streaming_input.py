@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -20,10 +21,8 @@ class Snapshotter(torch.nn.Module):
         super().__init__()
         if stride_size >= snapshot_size:
             raise ValueError(
-                "Snapshotter can't accommodate stride {} "
-                "which is greater than snapshot size {}".format(
-                    stride_size, snapshot_size
-                )
+                f"Snapshotter can't accommodate stride {stride_size} "
+                f"which is greater than snapshot size {snapshot_size}"
             )
 
         self.snapshot_size = snapshot_size
@@ -40,7 +39,7 @@ class Snapshotter(torch.nn.Module):
 
     def forward(
         self, update: torch.Tensor, snapshot: torch.Tensor
-    ) -> Tuple[torch.Tensor, ...]:
+    ) -> tuple[torch.Tensor, ...]:
         snapshot = snapshot[:, :, self.stride_size :]
         snapshot = torch.cat([snapshot, update], axis=-1)
 
@@ -72,7 +71,7 @@ def make_streaming_input_model(
     inputs: Sequence["ExposedTensor"],
     stride_size: int,
     batch_size: int = 1,
-    name: Optional[str] = None,
+    name: str | None = None,
     streams_per_gpu: int = 1,
 ) -> "Model":
     """Create a snapshotter model and add it to the repository"""
@@ -86,18 +85,16 @@ def make_streaming_input_model(
             shape = (x.shape[0], 0, x.shape[1])
         else:
             raise ValueError(
-                "Can't make streaming input for tensor {} "
-                "with shape {}".format(x.name, x.shape)
+                f"Can't make streaming input for tensor {x.name} "
+                f"with shape {x.shape}"
             )
         shapes.append(shape)
 
         if snapshot_size is not None and shape[-1] != snapshot_size:
             raise ValueError(
-                "Input for tensor {} has last dimension {} "
-                "which doesn't match expected last dimension {} "
-                "from tensor {}".format(
-                    x.name, shape[-1], snapshot_size, inputs[0].name
-                )
+                f"Input for tensor {x.name} has last dimension {shape[-1]} "
+                f"which doesn't match expected last dimension {snapshot_size} "
+                f"from tensor {inputs[0].name}"
             )
         elif snapshot_size is None:
             snapshot_size = shape[-1]

@@ -1,10 +1,10 @@
 import logging
 import os
 import time
+from collections.abc import Iterable
 from contextlib import contextmanager
 from queue import Empty, Queue
 from threading import Thread
-from typing import Iterable, Optional
 
 from spython.instance import Instance
 from spython.main import Client as SingularityClient
@@ -28,7 +28,7 @@ def target(q: Queue, instance: Instance, cmd: str, *args, **kwargs):
 
 
 class Timer:
-    def __init__(self, timeout: Optional[float], log_interval: float = 10):
+    def __init__(self, timeout: float | None, log_interval: float = 10):
         self.timeout = timeout or float("inf")
         self.log_interval = log_interval
         self._start_time = time.time()
@@ -50,18 +50,17 @@ class Timer:
         elapsed = time.time() - self._start_time
         if elapsed >= self.current_interval:
             logging.debug(
-                "Still waiting for server to start, {}s elapsed".format(
-                    self.current_interval
-                )
+                "Still waiting for server to start, "
+                f"{self.current_interval}s elapsed"
             )
             self._i += 1
         return elapsed < self.timeout and not self._stopped
 
 
-def get_wait(q: Queue, log_file: Optional[str] = None):
+def get_wait(q: Queue, log_file: str | None = None):
     def wait(
         endpoint: str = "localhost:8001",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         log_interval: float = 10,
     ) -> None:
         logging.info("Waiting for server to come online")
@@ -88,7 +87,7 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
                         # If so, something has gone wrong
                         response = q.get_nowait()
                         if log_file is not None and os.path.exists(log_file):
-                            with open(log_file, "r") as f:
+                            with open(log_file) as f:
                                 response["message"] += "\n" + f.read()
 
                         raise ValueError(
@@ -114,10 +113,10 @@ def get_wait(q: Queue, log_file: Optional[str] = None):
 def serve(
     model_repo_dir: str,
     image: str,
-    name: Optional[str] = None,
-    gpus: Optional[Iterable[int]] = None,
-    server_args: Optional[Iterable[str]] = None,
-    log_file: Optional[str] = None,
+    name: str | None = None,
+    gpus: Iterable[int] | None = None,
+    server_args: Iterable[str] | None = None,
+    log_file: str | None = None,
     wait: bool = False,
 ) -> Instance:
     """Context which spins up a Triton container in the background
@@ -184,8 +183,8 @@ def serve(
 
         if not os.path.exists(full_image):
             raise ValueError(
-                "Could not resolve relative path {} "
-                "to existing container image".format(image)
+                f"Could not resolve relative path {image} "
+                "to existing container image"
             )
         image = full_image
     elif not os.path.exists(image):
@@ -217,10 +216,8 @@ def serve(
                     gpu = host_visible_gpus[gpu]
                 except IndexError as exc:
                     raise ValueError(
-                        "GPU index {} too large for host environment "
-                        "with only {} available GPUs".format(
-                            gpu, len(host_visible_gpus)
-                        )
+                        f"GPU index {gpu} too large for host environment "
+                        f"with only {len(host_visible_gpus)} available GPUs"
                     ) from exc
                 mapped_gpus.append(gpu)
             gpus = mapped_gpus

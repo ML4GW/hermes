@@ -1,5 +1,5 @@
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import tensorrt as trt
 
@@ -8,10 +8,10 @@ if TYPE_CHECKING:
 
 
 def convert_network(
-    model_binary: Union[str, bytes],
+    model_binary: str | bytes,
     config: "ModelConfig",
     use_fp16: bool = False,
-) -> Optional[bytes]:
+) -> bytes | None:
     if isinstance(model_binary, str):
         with open(model_binary, "rb") as f:
             model_binary = f.read()
@@ -25,7 +25,7 @@ def _convert_network(
     model_binary: bytes,
     model_config: "ModelConfig",
     use_fp16: bool,
-) -> Optional[bytes]:
+) -> bytes | None:
     """
     using a cheap wrapper to save myself some tabs
     """
@@ -105,10 +105,8 @@ def _convert_network(
         # in the config, we don't know how to reconcile
         # this so raise an error
         raise ValueError(
-            "Number of config outputs {} doesn't "
-            "match number of outputs {} in network.".format(
-                len(model_config.output), network.num_outputs
-            )
+            f"Number of config outputs {len(model_config.output)} doesn't "
+            f"match number of outputs {network.num_outputs} in network."
         )
 
     for n, output in enumerate(model_config.output):
@@ -122,15 +120,10 @@ def _convert_network(
         # each output match what we would expect
         if len(network_output.shape) != len(output.dims):
             raise ValueError(
-                "Number of dimensions {} specified for "
-                "output {} with shape {} not equal to number {} found "
-                "in TensorRT network with shape {}".format(
-                    len(output.dims),
-                    output.name,
-                    output.dims,
-                    len(network_output.shape),
-                    network_output.shape,
-                )
+                f"Number of dimensions {len(output.dims)} specified for "
+                f"output {output.name} with shape {output.dims} not equal "
+                f"to number {len(network_output.shape)} found "
+                f"in TensorRT network with shape {network_output.shape}"
             )
 
         # now iterate through each dimension and make
@@ -139,10 +132,9 @@ def _convert_network(
         for ndim, cdim in zip(network_output.shape, output.dims, strict=True):
             if ndim != -1 and ndim != cdim:
                 raise ValueError(
-                    "Shape mismatch for output {} between "
-                    "config shape {} and network shape {}".format(
-                        output.name, output.dims, network_output.shape
-                    )
+                    f"Shape mismatch for output {output.name} between "
+                    f"config shape {output.dims} and network shape "
+                    f"{network_output.shape}"
                 )
 
     # now build the cuda engine and return

@@ -1,6 +1,7 @@
 import abc
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
+from typing import TYPE_CHECKING
 
 from hermes.quiver import conventions
 from hermes.quiver.types import SHAPE_TYPE
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from hermes.quiver.types import EXPOSED_TYPE
 
 
-_SHAPES_TYPE = Union[Sequence[SHAPE_TYPE], Dict[str, SHAPE_TYPE], None]
+_SHAPES_TYPE = Sequence[SHAPE_TYPE] | dict[str, SHAPE_TYPE] | None
 
 
 @dataclass
@@ -70,7 +71,7 @@ class Exporter(metaclass=abc.ABCMeta):
             # already, and we haven't provided any, so
             # raise an error because we don't have any
             # way to infer shapes to write to the config
-            raise ValueError("Must specify {} shapes".format(exposed_type))
+            raise ValueError(f"Must specify {exposed_type} shapes")
         elif len(exposed) == 0:
             # our config doesn't have any exposed tensors,
             # but we've provided some, so add them to the
@@ -91,9 +92,9 @@ class Exporter(metaclass=abc.ABCMeta):
                 # just the batch dimension
                 if any(i is None for i in shape[1:]):
                     raise ValueError(
-                        "Shape {} has variable length axes outside "
+                        f"Shape {shape} has variable length axes outside "
                         "of the first dimension. This isn't allowed "
-                        "at the moment".format(shape)
+                        "at the moment"
                     )
 
                 # add either an input our output to the model config
@@ -118,12 +119,9 @@ class Exporter(metaclass=abc.ABCMeta):
                 x.name for x in exposed
             }:
                 raise ValueError(
-                    "Provided {exposed_type}s {provided} "
-                    "don't match config {exposed_type}s {config}".format(
-                        exposed_type=exposed_type,
-                        provided=list(provided.keys()),
-                        config=[x.name for x in exposed],
-                    )
+                    f"Provided {exposed_type}s {list(provided.keys())} "
+                    f"don't match config {exposed_type}s "
+                    f"{[x.name for x in exposed]}"
                 )
 
             # next check that the shapes match
@@ -138,15 +136,14 @@ class Exporter(metaclass=abc.ABCMeta):
                     # shape found in the existing config, so
                     # raise an error
                     raise ValueError(
-                        "Shapes {}, {} don't match".format(
-                            tuple(config_shape), tuple(provided_shape)
-                        )
+                        f"Shapes {tuple(config_shape)}, "
+                        f"{tuple(provided_shape)} don't match"
                     )
 
     @abc.abstractmethod
     def _get_output_shapes(
-        self, model_fn: Callable, output_names: Optional[Sequence[str]]
-    ) -> Union[Sequence[SHAPE_TYPE], Dict[str, SHAPE_TYPE]]:
+        self, model_fn: Callable, output_names: Sequence[str] | None
+    ) -> Sequence[SHAPE_TYPE] | dict[str, SHAPE_TYPE]:
         """Infer the output shapes for the model
 
         Uses the `model_fn` and input names and shapes
@@ -183,7 +180,7 @@ class Exporter(metaclass=abc.ABCMeta):
         model_fn: Callable,
         version: int,
         input_shapes: _SHAPES_TYPE = None,
-        output_names: Optional[Sequence[str]] = None,
+        output_names: Sequence[str] | None = None,
         **kwargs,
     ):
         """Export a particular version of this platform's model
@@ -226,10 +223,8 @@ class Exporter(metaclass=abc.ABCMeta):
         # the model function type
         if not isinstance(model_fn, self.handles):
             raise ValueError(
-                "Exporter handles types {}, but was passed "
-                "a model function of type {}".format(
-                    self.handles, type(model_fn)
-                )
+                f"Exporter handles types {self.handles}, but was passed "
+                f"a model function of type {type(model_fn)}"
             )
 
         # first validate that any input shapes we provided

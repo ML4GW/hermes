@@ -1,7 +1,7 @@
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from hermes.quiver.io.exceptions import NoFilesFoundError
 from hermes.quiver.io.file_system import FileSystem
@@ -35,7 +35,7 @@ class LocalFileSystem(FileSystem):
     def isdir(self, path: str) -> bool:
         return (self.root / path).isdir()
 
-    def list(self, path: Optional[str] = None) -> List[str]:
+    def list(self, path: str | None = None) -> list[str]:
         target = self.root if path is None else self.root / path
         return [p.name for p in target.iterdir()]
 
@@ -72,7 +72,7 @@ class LocalFileSystem(FileSystem):
         else:
             raise TypeError(
                 "Expected object to be of type "
-                "str or bytes, found type {}".format(type(obj))
+                f"str or bytes, found type {type(obj)}"
             )
 
         with open(self.root / path, mode) as f:

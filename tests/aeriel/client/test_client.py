@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Tuple
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -11,7 +10,7 @@ from hermes.aeriel.client import InferenceClient
 @dataclass
 class DummyInferInput:
     _name: str
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
 
     def __post_init__(self):
         self.x = None

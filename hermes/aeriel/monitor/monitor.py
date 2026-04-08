@@ -2,8 +2,9 @@ import re
 import sys
 import threading
 import time
+from collections.abc import Iterable
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
-from typing import TYPE_CHECKING, Dict, Iterable, List, Union
+from typing import TYPE_CHECKING
 
 import tritonclient.grpc as triton
 import urllib3
@@ -91,7 +92,7 @@ class ServerMonitor(PipelineProcess):
     def __init__(
         self,
         model_name: str,
-        ips: Union[str, Iterable[str]],
+        ips: str | Iterable[str],
         filename: str,
         model_version: int = -1,
         max_request_rate: float = 10,
@@ -180,8 +181,8 @@ class ServerMonitor(PipelineProcess):
         self.max_request_rate = max_request_rate
 
     def parse_for_ip(
-        self, ip: str, http: urllib3.PoolManager, tracker: Dict[str, int]
-    ) -> List[str]:
+        self, ip: str, http: urllib3.PoolManager, tracker: dict[str, int]
+    ) -> list[str]:
         # request some metrics data from the given IP
         # and record the time at which we get the response
         # TODO: make port configurable
@@ -208,9 +209,9 @@ class ServerMonitor(PipelineProcess):
                 # sometimes Triton won't be able to collect metrics,
                 # so raise an error if there's no data available
                 raise ValueError(
-                    "Couldn't find count for model {} version {} "
-                    "on server at IP address {}. Metric service "
-                    "response was:\n{}".format(model, version, ip, content)
+                    f"Couldn't find count for model {model} version {version} "
+                    f"on server at IP address {ip}. Metric service "
+                    f"response was:\n{content}"
                 )
 
             count = int(float(count.group(0)))
