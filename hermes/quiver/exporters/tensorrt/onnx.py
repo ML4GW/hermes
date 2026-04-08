@@ -36,15 +36,15 @@ def _convert_network(
 
     # if the model config doesn't specify a max
     # batch size, the config's value will read 0,
-    # so replace with 1 as a default here for streaming
-    builder.max_batch_size = max(model_config.max_batch_size, 1)
+    # so replace with 1 as a default here for streaming.
+    max_batch_size = max(model_config.max_batch_size, 1)
 
     # if any of the inputs have a variable
     # length batch dimension, create an
     # optimization profile for that input with
     # the most optimized batch size being the largest
     config = stack.enter_context(builder.create_builder_config())
-    config.max_workspace_size = 1 << 28
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 28)
     if use_fp16:
         config.flags |= 1 << int(trt.BuilderFlag.FP16)
         # builder.strict_type_constraints = True
@@ -65,7 +65,7 @@ def _convert_network(
 
         profile = builder.create_optimization_profile()
         min_shape = tuple([1] + input.dims[1:])
-        max_shape = tuple([builder.max_batch_size] + input.dims[1:])
+        max_shape = tuple([max_batch_size] + input.dims[1:])
         optimal_shape = max_shape
 
         profile.set_shape(input.name, min_shape, optimal_shape, max_shape)
