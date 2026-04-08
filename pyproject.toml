@@ -6,12 +6,11 @@ authors = [
     { name = "Alec Gunny", email = "alec.gunny@ligo.org" },
     { name = "Ethan Marx", email = "emarx@mit.edu" },
 ]
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.11,<3.14"
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "tritonclient[grpc]>=2.48",
