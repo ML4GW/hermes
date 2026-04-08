@@ -110,7 +110,8 @@ class Exporter(metaclass=abc.ABCMeta):
                 # through the inputs/outputs in the config
                 # in order and assume they're meant to match
                 provided = {
-                    x.name: shape for x, shape in zip(exposed, provided)
+                    x.name: shape
+                    for x, shape in zip(exposed, provided, strict=True)
                 }
 
             if len(provided) != len(exposed) or set(provided) != {

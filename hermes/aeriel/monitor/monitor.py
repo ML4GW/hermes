@@ -123,7 +123,7 @@ class ServerMonitor(PipelineProcess):
                 # make sure a model doesn't appear more than once
                 # TODO: is this necessary? Or was there another
                 # reason for adding this that I'm forgetting?
-                uniques = set(zip(models, versions))
+                uniques = set(zip(models, versions, strict=True))
 
                 # now go through and reaggregate our model
                 # names and versions, checking for models
@@ -190,7 +190,7 @@ class ServerMonitor(PipelineProcess):
         content = response.data.decode()
 
         lines = []
-        for model, version in zip(self.models, self.versions):
+        for model, version in zip(self.models, self.versions, strict=True):
             try:
                 model_tracker = tracker[model]
             except KeyError as exc:

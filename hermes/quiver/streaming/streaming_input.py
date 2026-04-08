@@ -58,7 +58,7 @@ class Snapshotter(torch.nn.Module):
             splits = [i or 1 for i in self.channels_per_snapshot]
             snapshots = torch.split(snapshots, splits, dim=1)
 
-            it = zip(self.channels_per_snapshot, snapshots)
+            it = zip(self.channels_per_snapshot, snapshots, strict=True)
             snapshots = [x if i != 0 else x[:, 0] for i, x in it]
         else:
             snapshots = (snapshots,)

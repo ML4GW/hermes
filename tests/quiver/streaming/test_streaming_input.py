@@ -65,7 +65,9 @@ def test_snapshotter(snapshot_size, stride_size, batch_size, channels):
 
     assert len(outputs) == len(channels)
     offset = stride_size
-    for k, (output, channel_dim) in enumerate(zip(outputs, channels)):
+    for k, (output, channel_dim) in enumerate(
+        zip(outputs, channels, strict=True)
+    ):
         expected = (i for i in (batch_size, channel_dim, snapshot_size) if i)
         assert output.shape == tuple(expected)
         if channel_dim == 0:
@@ -110,7 +112,7 @@ def test_make_streaming_input_model(
 
     inputs = []
     names = "abcdefg"[: len(channels)]
-    for channel, name in zip(channels, names):
+    for channel, name in zip(channels, names, strict=True):
         x = MagicMock()
         x.name = name
         x.model.name = "my-model"
@@ -150,7 +152,9 @@ def test_make_streaming_input_model(
     assert config.input[0].dims == [1, num_channels, update_size]
 
     assert len(config.output) == len(channels)
-    for channel, name, output in zip(channels, names, config.output):
+    for channel, name, output in zip(
+        channels, names, config.output, strict=True
+    ):
         assert output.name == f"my-model.{name}_snapshot"
 
         expected_shape = [i for i in [batch_size, channel, snapshot_size] if i]

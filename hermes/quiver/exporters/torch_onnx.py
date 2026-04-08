@@ -112,7 +112,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # if we provided names for the outputs, return them
         # as a dict for validation against the config
         if output_names is not None:
-            shapes = dict(zip(output_names, shapes))
+            shapes = dict(zip(output_names, shapes, strict=True))
         return shapes
 
     def export(self, model_fn, export_path, verbose=0, **kwargs):

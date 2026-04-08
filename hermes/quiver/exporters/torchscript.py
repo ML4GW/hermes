@@ -53,7 +53,7 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
         # use tritons recommended naming conventions
         # by inferring the names from the model_fn
         parameters = get_input_names_from_torch_object(model_fn)
-        input_shapes = dict(zip(parameters, input_shapes))
+        input_shapes = dict(zip(parameters, input_shapes, strict=True))
         super().__call__(model_fn, version, input_shapes, output_names)
 
     def _get_tensor(self, shape):
@@ -151,7 +151,9 @@ class TorchScript(Exporter, metaclass=TorchScriptMeta):
             )
             shapes = {
                 name: shape
-                for i, (name, shape) in enumerate(zip(output_names, shapes))
+                for i, (name, shape) in enumerate(
+                    zip(output_names, shapes, strict=True)
+                )
             }
         return shapes
 

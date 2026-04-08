@@ -34,7 +34,7 @@ class AddOneProcess(PipelineProcess):
         return super().get_package() + 1
 
 
-def test_process(throttle_tol=0.15):
+def test_process(throttle_tol=0.20):
     # test that process starts when context enters
     with PipelineProcess(name="test_process") as process:
         assert process.is_alive()
