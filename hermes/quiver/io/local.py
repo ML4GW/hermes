@@ -34,7 +34,7 @@ class LocalFileSystem(FileSystem):
         return str(path)
 
     def isdir(self, path: str) -> bool:
-        return (self.root / path).isdir()
+        return (self.root / path).is_dir()
 
     def list(self, path: str | None = None) -> builtins.list[str]:
         target = self.root if path is None else self.root / path
@@ -46,12 +46,12 @@ class LocalFileSystem(FileSystem):
 
     def remove(self, path: str):
         target = self.root / path
-        if target.isdir():
+        if target.is_dir():
             shutil.rmtree(target)
         elif target.is_file():
             target.unlink()
         else:
-            matches = self.glob(path)
+            matches = self.glob(path) if path else []
             if not matches:
                 raise NoFilesFoundError(path)
             for match in matches:
@@ -80,4 +80,4 @@ class LocalFileSystem(FileSystem):
             f.write(obj)
 
     def __str__(self):
-        return self.root
+        return str(self.root)
