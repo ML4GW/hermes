@@ -91,38 +91,48 @@ def test_online_averager(
     stop = start + update_size * batch_size
     validate_output(start, stop, 0, stream.cpu().numpy()[0])
 
-    # finally check that the snapshot values are as expected
-    # TODO: work out the math for what the expected snapshot
-    # values are during the non-exact period of updating.
-    # filled = (num_updates - 1) * update_size
-    # expected = torch.arange(stop, stop + filled)
+    # Finally check that the snapshot values are as expected.
+    # Position j receives N contributions of (stop + j) / num_updates,
+    # where N = min(batch_size, num_updates - 1 - j // update_size).
+    # The later indices are covered by fewer batch elements as the
+    # windows stop overlapping.
+    filled = (num_updates - 1) * update_size
+    if filled > 0:
+        indices = torch.arange(filled)
+        num_contributions = torch.clamp(
+            num_updates - 1 - indices // update_size,
+            max=batch_size,
+        ).float()
+        expected_snap = (
+            num_contributions
+            * torch.arange(stop, stop + filled, dtype=torch.float32)
+            / num_updates
+        )
+        if num_channels is None:
+            assert torch.allclose(new_snapshot[:filled], expected_snap)
+            assert (new_snapshot[filled:] == 0).all().item()
+        else:
+            for i in range(num_channels):
+                assert torch.allclose(new_snapshot[i, :filled], expected_snap)
+                assert (new_snapshot[i, filled:] == 0).all().item()
 
-    # if num_channels is None:
-    #     assert (new_snapshot[:filled] == expected).all().item()
-    #     assert (new_snapshot[filled:] == 0).all().item()
-    # else:
-    #     for i in range(num_channels):
-    #         assert (new_snapshot[i, :filled] == expected).all().item()
-    #         assert (new_snapshot[i, filled:] == 0).all().item()
-
-    # now take the next step and confirm everything again
+    # now take the next step and confirm the output is correct
     stream, newer_snapshot = averager(x[batch_size:], new_snapshot)
 
     assert stream.shape == (1,) + expected_shape
-    assert new_snapshot.shape == snapshot.shape
+    assert newer_snapshot.shape == snapshot.shape
 
     start = size - update_size * (num_updates + batch_size - 1)
     stop = start + update_size * batch_size
     validate_output(start, stop, batch_size, stream.cpu().numpy()[0])
 
-    # expected = torch.arange(stop, stop + filled)
-    # if num_channels is None:
-    #     assert (newer_snapshot[:filled] == expected).all().item()
-    #     assert (newer_snapshot[filled:] == 0).all().item()
-    # else:
-    #     for i in range(num_channels):
-    #         assert (newer_snapshot[i, :filled] == expected).all().item()
-    #         assert (newer_snapshot[i, filled:] == 0).all().item()
+    # verify the zero-padding region of the second snapshot is clean
+    if filled > 0:
+        if num_channels is None:
+            assert (newer_snapshot[filled:] == 0).all().item()
+        else:
+            for i in range(num_channels):
+                assert (newer_snapshot[i, filled:] == 0).all().item()
 
 
 @pytest.fixture(params=[None, 1, 2, 4])

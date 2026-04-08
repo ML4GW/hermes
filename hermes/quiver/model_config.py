@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Literal
 
 from tritonclient.grpc import model_config_pb2 as model_config
 
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 
 
 KIND_TYPE = Literal["auto", "cpu", "gpu"]
-GPUS_TYPE = Union[int, Sequence[int], None]
+GPUS_TYPE = int | Sequence[int] | None
 
 
 def _add_exposed_tensor(f):
@@ -29,30 +30,18 @@ def _add_exposed_tensor(f):
         dtype: Literal["float32", "int64"] = "float32",
         **kwargs,  # including kwargs for reshaping later or something
     ) -> output_type:
-        """Add an {exposed} tensor to the config
-
-        Appends an additional entry to `ModelConfig.{exposed}`
-        with the specified keyword arguments.
-
-        Args:
-            name:
-                The name of the {exposed}
-            shape:
-                The shape of the {exposed}, with `None`
-                representing variable-length axes
-            dtype:
-                The datatype of the {exposed}
-        """.format(exposed=exposed_type)
-
         # TODO: Handle datatypes more robustly
         if dtype == "float32":
             dtype = model_config.DataType.TYPE_FP32
         elif dtype == "int64":
             dtype = model_config.DataType.TYPE_INT64
         else:
-            raise ValueError(f"Unknown datatype {dtype}")
+            raise ValueError(
+                f"Unknown datatype {dtype}. "
+                "Expected either 'float32' or 'int64'."
+            )
 
-        shape = (x or -1 for x in shape)
+        shape = tuple(x or -1 for x in shape)
         exposed_obj = output_type(
             name=name,
             dims=shape,
@@ -65,6 +54,16 @@ def _add_exposed_tensor(f):
         return exposed_obj
 
     wrapper.__name__ = f.__name__
+    wrapper.__doc__ = (
+        f"Add an {exposed_type} tensor to the config\n\n"
+        f"Appends an additional entry to `ModelConfig.{exposed_type}`"
+        " with the specified keyword arguments.\n\n"
+        "Args:\n"
+        f"    name:\n        The name of the {exposed_type}\n"
+        f"    shape:\n        The shape of the {exposed_type},"
+        " with `None` representing variable-length axes\n"
+        "    dtype:\n        The datatype of the tensor\n"
+    )
     return wrapper
 
 
@@ -120,19 +119,15 @@ class ModelConfig:
             # matches the name passed from the model
             if config.name != model.name:
                 raise ValueError(
-                    "Name in existing config {} "
-                    "doesn't match model name {}".format(
-                        config.name, model.name
-                    )
+                    f"Name in existing config {config.name} "
+                    f"doesn't match model name {model.name}"
                 )
 
             # do the same for the platform
             if config.platform != model.platform.value:
                 raise ValueError(
-                    "Platform in existing config {} "
-                    "doesn't match model platform {}".format(
-                        config.platform, model.platform.value
-                    )
+                    f"Platform in existing config {config.platform} "
+                    f"doesn't match model platform {model.platform.value}"
                 )
 
             # add in any kwargs passed to overwrite
@@ -184,11 +179,11 @@ class ModelConfig:
         kind: KIND_TYPE = "gpu",
         gpus: GPUS_TYPE = None,
         count: int = 1,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> model_config.ModelInstanceGroup:
         try:
             kind = model_config.ModelInstanceGroup.Kind.Value(
-                "KIND_{}".format(kind.upper())
+                f"KIND_{kind.upper()}"
             )
         except ValueError as exc:
             raise ValueError(
@@ -210,13 +205,11 @@ class ModelConfig:
         return instance_group
 
     def scale_instance_group(
-        self, count: int, name: Union[str, int, None] = None
+        self, count: int, name: str | int | None = None
     ) -> model_config.ModelInstanceGroup:
         if len(self.instance_group) == 0:
             raise ValueError(
-                "Config for model {} has no instance groups to scale".format(
-                    self.name
-                )
+                f"Config for model {self.name} has no instance groups to scale"
             )
 
         if name is None or isinstance(name, int):
@@ -225,22 +218,21 @@ class ModelConfig:
                 group = self.instance_group[name]
             except IndexError as exc:
                 raise IndexError(
-                    "Config for model {} with {} instance groups "
-                    "has no instance group at index {}".format(
-                        self.name, len(self.instance_group), name
-                    )
+                    f"Config for model {self.name} with "
+                    f"{len(self.instance_group)} instance groups "
+                    f"has no instance group at index {name}"
                 ) from exc
         elif isinstance(name, str):
             groups = [g.name for g in self.instance_group if g.name == name]
             if len(groups) == 0:
                 raise ValueError(
-                    "Config for model {} has no instance groups "
-                    "named {}".format(self.name, name)
+                    f"Config for model {self.name} has no instance groups "
+                    f"named {name}"
                 )
             group = groups[0]
         else:
             raise TypeError(
-                "Unexpected type for argument `name` {}".format(type(name))
+                f"Unexpected type for argument `name` {type(name)}"
             )
 
         group.count = count
@@ -264,7 +256,7 @@ class ModelConfig:
 
 
 class EnsembleConfig(ModelConfig):
-    def add_step(self, model: "Model", version: Optional[int] = None):
+    def add_step(self, model: "Model", version: int | None = None):
         version = version or -1
         step = model_config.ModelEnsembling.Step(
             model_name=model.name, model_version=version

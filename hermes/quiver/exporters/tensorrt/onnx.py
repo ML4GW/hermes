@@ -1,17 +1,48 @@
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import tensorrt as trt
 
 if TYPE_CHECKING:
     from tritonclient.grpc.model_config_pb2 import ModelConfig
 
+# Minimum GPU compute capability (SM × 10) supported per TRT major version.
+# TRT 10 dropped Volta (SM 7.0); earlier versions are more permissive.
+_TRT_MIN_SM = {8: 35, 9: 53, 10: 75}
+
+
+def _check_gpu_trt_compatibility() -> None:
+    """Raise a clear RuntimeError if the current GPU is not supported."""
+    try:
+        import torch
+    except ImportError:
+        return  # can't check without torch; TRT will surface its own error
+
+    if not torch.cuda.is_available():
+        return
+
+    major, minor = torch.cuda.get_device_capability()
+    sm = major * 10 + minor
+
+    trt_major = int(trt.__version__.split(".")[0])
+    min_sm = _TRT_MIN_SM.get(trt_major)
+    if min_sm is not None and sm < min_sm:
+        device = torch.cuda.get_device_name()
+        min_major, min_minor = divmod(min_sm, 10)
+        raise RuntimeError(
+            f"GPU '{device}' has compute capability SM {major}.{minor}, "
+            f"which is not supported by TensorRT {trt.__version__}. "
+            f"TensorRT {trt_major}.x requires SM {min_major}.{min_minor} "
+            f"or later. For Volta-class GPUs (V100), use an NVIDIA "
+            f"container that includes TensorRT 9.x."
+        )
+
 
 def convert_network(
-    model_binary: Union[str, bytes],
+    model_binary: str | bytes,
     config: "ModelConfig",
     use_fp16: bool = False,
-) -> Optional[bytes]:
+) -> bytes | None:
     if isinstance(model_binary, str):
         with open(model_binary, "rb") as f:
             model_binary = f.read()
@@ -25,10 +56,11 @@ def _convert_network(
     model_binary: bytes,
     model_config: "ModelConfig",
     use_fp16: bool,
-) -> Optional[bytes]:
+) -> bytes | None:
     """
     using a cheap wrapper to save myself some tabs
     """
+    _check_gpu_trt_compatibility()
 
     # do some TRT boilerplate initialization
     logger = trt.Logger()
@@ -36,15 +68,15 @@ def _convert_network(
 
     # if the model config doesn't specify a max
     # batch size, the config's value will read 0,
-    # so replace with 1 as a default here for streaming
-    builder.max_batch_size = max(model_config.max_batch_size, 1)
+    # so replace with 1 as a default here for streaming.
+    max_batch_size = max(model_config.max_batch_size, 1)
 
     # if any of the inputs have a variable
     # length batch dimension, create an
     # optimization profile for that input with
     # the most optimized batch size being the largest
     config = stack.enter_context(builder.create_builder_config())
-    config.max_workspace_size = 1 << 28
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 28)
     if use_fp16:
         config.flags |= 1 << int(trt.BuilderFlag.FP16)
         # builder.strict_type_constraints = True
@@ -65,7 +97,7 @@ def _convert_network(
 
         profile = builder.create_optimization_profile()
         min_shape = tuple([1] + input.dims[1:])
-        max_shape = tuple([builder.max_batch_size] + input.dims[1:])
+        max_shape = tuple([max_batch_size] + input.dims[1:])
         optimal_shape = max_shape
 
         profile.set_shape(input.name, min_shape, optimal_shape, max_shape)
@@ -105,10 +137,8 @@ def _convert_network(
         # in the config, we don't know how to reconcile
         # this so raise an error
         raise ValueError(
-            "Number of config outputs {} doesn't "
-            "match number of outputs {} in network.".format(
-                len(model_config.output), network.num_outputs
-            )
+            f"Number of config outputs {len(model_config.output)} doesn't "
+            f"match number of outputs {network.num_outputs} in network."
         )
 
     for n, output in enumerate(model_config.output):
@@ -122,15 +152,10 @@ def _convert_network(
         # each output match what we would expect
         if len(network_output.shape) != len(output.dims):
             raise ValueError(
-                "Number of dimensions {} specified for "
-                "output {} with shape {} not equal to number {} found "
-                "in TensorRT network with shape {}".format(
-                    len(output.dims),
-                    output.name,
-                    output.dims,
-                    len(network_output.shape),
-                    network_output.shape,
-                )
+                f"Number of dimensions {len(output.dims)} specified for "
+                f"output {output.name} with shape {output.dims} not equal "
+                f"to number {len(network_output.shape)} found "
+                f"in TensorRT network with shape {network_output.shape}"
             )
 
         # now iterate through each dimension and make
@@ -139,10 +164,9 @@ def _convert_network(
         for ndim, cdim in zip(network_output.shape, output.dims, strict=True):
             if ndim != -1 and ndim != cdim:
                 raise ValueError(
-                    "Shape mismatch for output {} between "
-                    "config shape {} and network shape {}".format(
-                        output.name, output.dims, network_output.shape
-                    )
+                    f"Shape mismatch for output {output.name} between "
+                    f"config shape {output.dims} and network shape "
+                    f"{network_output.shape}"
                 )
 
     # now build the cuda engine and return

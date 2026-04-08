@@ -1,5 +1,6 @@
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Union
 
 from hermes.quiver import Platform
 from hermes.quiver.exporters.utils import find_exporter
@@ -107,7 +108,7 @@ class Model:
         return versions
 
     @property
-    def inputs(self) -> Dict[str, ExposedTensor]:
+    def inputs(self) -> dict[str, ExposedTensor]:
         """The inputs exposed by this model
 
         Represented by a dictionary mapping from the name
@@ -120,7 +121,7 @@ class Model:
         return inputs
 
     @property
-    def outputs(self) -> Dict[str, ExposedTensor]:
+    def outputs(self) -> dict[str, ExposedTensor]:
         """The outputs exposed by this model
 
         Represented by a dictionary mapping from the name
@@ -135,9 +136,9 @@ class Model:
     def export_version(
         self,
         model_fn: Union[Callable, "Model"],
-        version: Optional[int] = None,
-        input_shapes: Optional[Dict[str, "SHAPE_TYPE"]] = None,
-        output_names: Optional[Sequence[str]] = None,
+        version: int | None = None,
+        input_shapes: dict[str, "SHAPE_TYPE"] | None = None,
+        output_names: Sequence[str] | None = None,
         verbose: int = 0,
         **kwargs,
     ) -> str:
@@ -215,12 +216,19 @@ class EnsembleModel(Model):
     """
 
     @property
-    def models(self) -> Model:
-        """Returns the models which this enesmble leverages for inference."""
+    def models(self) -> list[Model]:
+        """Returns the models which this ensemble leverages for inference."""
         return [
             self.repository.models[step.model_name]
             for step in self.config.ensemble_scheduling.step
         ]
+
+    def _find_step(self, model_name: str):
+        """Return the enemble scheduling step for the named model"""
+        for step in self.config.ensemble_scheduling.step:
+            if step.model_name == model_name:
+                return step
+        return None
 
     def _update_step_map(
         self,
@@ -230,16 +238,16 @@ class EnsembleModel(Model):
     ):
         """Updates the routing of data through the ensemble."""
 
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == tensor.model.name:
-                step_map = getattr(step, exposed_type + "_map")
-                step_map[tensor.name] = key
+        step = self._find_step(tensor.model.name)
+        if step is not None:
+            step_map = getattr(step, exposed_type + "_map")
+            step_map[tensor.name] = key
 
     def add_input(
         self,
         input: ExposedTensor,
-        version: Optional[int] = None,
-        key: Optional[str] = None,
+        version: int | None = None,
+        key: str | None = None,
     ) -> ExposedTensor:
         if input.model not in self.models:
             self.config.add_step(input.model, version=version)
@@ -259,8 +267,8 @@ class EnsembleModel(Model):
     def add_output(
         self,
         output: ExposedTensor,
-        version: Optional[int] = None,
-        key: Optional[str] = None,
+        version: int | None = None,
+        key: str | None = None,
     ) -> ExposedTensor:
         if output.model not in self.models:
             self.config.add_step(output.model, version=version)
@@ -279,10 +287,10 @@ class EnsembleModel(Model):
 
     def add_streaming_inputs(
         self,
-        inputs: Union[Sequence[ExposedTensor], ExposedTensor],
+        inputs: Sequence[ExposedTensor] | ExposedTensor,
         stream_size: int,
         batch_size: int = 1,
-        name: Optional[str] = None,
+        name: str | None = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
         if not isinstance(inputs, Sequence):
@@ -347,8 +355,8 @@ class EnsembleModel(Model):
         output: ExposedTensor,
         update_size: int,
         num_updates: int,
-        batch_size: Optional[int] = None,
-        name: Optional[str] = None,
+        batch_size: int | None = None,
+        name: str | None = None,
         streams_per_gpu: int = 1,
     ) -> ExposedTensor:
         if output.model not in self.models:
@@ -386,7 +394,7 @@ class EnsembleModel(Model):
         self,
         outbound: ExposedTensor,
         inbound: ExposedTensor,
-        key: Optional[str] = None,
+        key: str | None = None,
     ) -> None:
         # verify that we're connecting tensors of the same shape
         for dim1, dim2 in zip(outbound.shape, inbound.shape, strict=True):
@@ -398,7 +406,7 @@ class EnsembleModel(Model):
 
         # add the models associated with the
         # inbound and outbound tensors to the
-        # ensmble if they aren't in it yet
+        # ensemble if they aren't in it yet
         for tensor in [inbound, outbound]:
             if tensor.model not in self.models:
                 # TODO: support per-model versioning
@@ -406,9 +414,7 @@ class EnsembleModel(Model):
 
         # find the step in the config associated
         # with the outbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == outbound.model.name:
-                break
+        step = self._find_step(outbound.model.name)
 
         # check to see if this tensor has already been
         # associated with some named mapping.
@@ -436,9 +442,7 @@ class EnsembleModel(Model):
             key = existing_key
 
         # find the step associated with the inbound tensor
-        for step in self.config.ensemble_scheduling.step:
-            if step.model_name == inbound.model.name:
-                break
+        step = self._find_step(inbound.model.name)
 
         # check to see if this tensor has already been
         # given a key
