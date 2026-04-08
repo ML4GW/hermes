@@ -76,7 +76,7 @@ class PipelineProcess(mp.Process):
             else:
                 if isinstance(item, ExceptionWrapper):
                     item.reraise()
-                elif item is StopIteration or isinstance(item, StopIteration):
+                elif isinstance(item, StopIteration):
                     raise StopIteration
                 return item
 

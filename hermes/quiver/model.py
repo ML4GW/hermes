@@ -215,7 +215,7 @@ class EnsembleModel(Model):
     """
 
     @property
-    def models(self) -> Model:
+    def models(self) -> list[Model]:
         """Returns the models which this enesmble leverages for inference."""
         return [
             self.repository.models[step.model_name]

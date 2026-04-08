@@ -97,6 +97,7 @@ class GCSFileSystem(FileSystem):
             # as a directory to return True
             if "/" in blob.name.replace(path, "", 1):
                 return True
+        return False
 
     def list(self, path: Optional[str] = None) -> List[str]:
         if path is not None and self.root:

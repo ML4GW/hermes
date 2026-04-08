@@ -52,7 +52,7 @@ def _add_exposed_tensor(f):
         else:
             raise ValueError(f"Unknown datatype {dtype}")
 
-        shape = (x or -1 for x in shape)
+        shape = tuple(x or -1 for x in shape)
         exposed_obj = output_type(
             name=name,
             dims=shape,
