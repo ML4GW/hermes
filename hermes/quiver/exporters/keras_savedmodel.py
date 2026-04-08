@@ -63,7 +63,7 @@ class KerasSavedModel(Exporter, metaclass=KerasSavedModelMeta):
 
         super().__call__(model_fn, version, input_shapes, None)
 
-    def _get_output_shapes(self, model_fn, output_names=None):
+    def _get_output_shapes(self, model_fn):
         return {
             name: output.shape
             for name, output in zip(
@@ -71,7 +71,7 @@ class KerasSavedModel(Exporter, metaclass=KerasSavedModelMeta):
             )
         }
 
-    def export(self, model_fn, export_path, verbose=0):
+    def export(self, model_fn, export_path):
         with tempfile.TemporaryDirectory() as tmpdir:
             model_fn.save(tmpdir)
 
