@@ -86,14 +86,17 @@ def get_wait(q: Queue, log_file: str | None = None):
                         # and placed the response in the _response_queue.
                         # If so, something has gone wrong
                         response = q.get_nowait()
+                        msg = response["message"]
+                        if isinstance(msg, list):
+                            msg = "".join(msg)
                         if log_file is not None and os.path.exists(log_file):
                             with open(log_file) as f:
-                                response["message"] += "\n" + f.read()
+                                msg += "\n" + f.read()
 
                         raise ValueError(
                             f"Server failed to start with return code "
                             f"{response['return_code']} and message:\n"
-                            f"{response['message']}"
+                            f"{msg}"
                         )
                     except Empty:
                         # otherwise we're still just waiting for the
