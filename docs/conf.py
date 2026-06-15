@@ -12,6 +12,7 @@
 #
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -23,7 +24,10 @@ copyright = "2021, Alec Gunny"
 author = "Alec Gunny"
 
 # The full version, including alpha/beta/rc tags
-release = "0.1.0"
+try:
+    release = version("ml4gw-hermes")
+except PackageNotFoundError:
+    release = "unknown"
 
 
 # -- General configuration ---------------------------------------------------
@@ -58,4 +62,4 @@ html_theme = "sphinx_material"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
-html_title = "Quiver"
+html_title = "Hermes"

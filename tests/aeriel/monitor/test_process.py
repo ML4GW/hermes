@@ -83,7 +83,6 @@ def test_process(throttle_tol=0.20):
             next(iter(process))
 
 
-@pytest.mark.depends(on=["test_process"])
 def test_pipeline():
     generator = RangeProcess(100, name="generator")
     returner = PipelineProcess(name="returner")
@@ -135,7 +134,6 @@ def test_pipeline():
         returner >> "bad type"
 
 
-@pytest.mark.depends(on=["test_pipeline"])
 def test_process_piping():
     # test the piping system for connecting
     # one process to the another, using a process

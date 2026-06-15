@@ -1,6 +1,7 @@
 import pickle
+from collections.abc import Callable, Sequence
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Union
 
 import requests
 
@@ -74,16 +75,16 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
         self,
         model_fn: Union[Callable, "Model"],
         version: int,
-        input_shapes: Optional[SHAPE_TYPE] = None,
-        output_names: Optional[Sequence[str]] = None,
+        input_shapes: SHAPE_TYPE | None = None,
+        output_names: Sequence[str] | None = None,
         use_fp16: bool = False,
-        endpoint: Optional[str] = None,
+        endpoint: str | None = None,
     ):
         if endpoint is None and not _has_trt:
             raise ImportError(
                 "Must have  tensorrt installed to use TorchTensorRT "
                 "export platform if no conversion endpoint is specified. "
-                "Encountered import error: '{}'".format(_error_msg)
+                f"Encountered import error: '{_error_msg}'"
             )
 
         def do_conversion(model_binary, config):

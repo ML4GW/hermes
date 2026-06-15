@@ -2,7 +2,7 @@ import multiprocessing as mp
 import sys
 import time
 from queue import Empty
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from hermes.aeriel.monitor.logging import listener, logger
 from hermes.aeriel.monitor.utils import ExceptionWrapper, Throttle
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 class PipelineProcess(mp.Process):
     def __init__(
-        self, name: str, rate: Optional[float] = None, join_timeout: float = 10
+        self, name: str, rate: float | None = None, join_timeout: float = 10
     ) -> None:
         self._pause_event = mp.Event()
         self._stop_event = mp.Event()
@@ -76,7 +76,7 @@ class PipelineProcess(mp.Process):
             else:
                 if isinstance(item, ExceptionWrapper):
                     item.reraise()
-                elif item is StopIteration or isinstance(item, StopIteration):
+                elif isinstance(item, StopIteration):
                     raise StopIteration
                 return item
 
@@ -186,7 +186,7 @@ class PipelineProcess(mp.Process):
         else:
             raise TypeError(
                 "Unsupported operand type(s) for >> "
-                "PipelineProcess and {}".format(type(child))
+                f"PipelineProcess and {type(child)}"
             )
 
 
@@ -217,7 +217,6 @@ class Pipeline:
             return Pipeline(processes)
         else:
             raise TypeError(
-                "Unsupported operand type(s) for >> Pipeline and {}".format(
-                    type(child)
-                )
+                "Unsupported operand type(s) for >> Pipeline and "
+                f"{type(child)}"
             )

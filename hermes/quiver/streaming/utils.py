@@ -1,5 +1,6 @@
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import torch
 from tritonclient.grpc import model_config_pb2 as model_config
@@ -9,15 +10,17 @@ from hermes.quiver.platform import Platform
 if TYPE_CHECKING:
     from hermes.quiver import Model, ModelRepository
 
+_MAX_SEQUENCE_IDLE_MICROSECONDS = 10_000_000
+
 
 def add_streaming_model(
     repository: "ModelRepository",
     streaming_layer: torch.nn.Module,
     name: str,
     input_name: str,
-    input_shape: Tuple[int, ...],
+    input_shape: tuple[int, ...],
     state_names: Sequence[str],
-    state_shapes: Sequence[Tuple[int, ...]],
+    state_shapes: Sequence[tuple[int, ...]],
     output_names: Sequence[str],
     streams_per_gpu: int,
 ) -> "Model":
@@ -55,7 +58,7 @@ def add_streaming_model(
         states.insert(0, state)
 
     sequence_batching = model_config.ModelSequenceBatching(
-        max_sequence_idle_microseconds=10000000,
+        max_sequence_idle_microseconds=_MAX_SEQUENCE_IDLE_MICROSECONDS,
         direct=model_config.ModelSequenceBatching.StrategyDirect(),
         state=states,
     )

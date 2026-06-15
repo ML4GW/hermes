@@ -29,7 +29,7 @@ def test_get_wait():
         "tritonclient.grpc.InferenceServerClient.is_server_live",
         new=is_server_live,
     ):
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TimeoutError):
             wait(timeout=0.1)
 
 

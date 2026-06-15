@@ -1,7 +1,8 @@
 import abc
+import builtins
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING
 
 from google.protobuf import text_format
 from tritonclient.grpc.model_config_pb2 import ModelConfig
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class FileSystem(metaclass=abc.ABCMeta):
-    root: Union[Path, str]
+    root: Path | str
 
     @abc.abstractmethod
     def soft_makedirs(self, path: str) -> bool:
@@ -31,11 +32,11 @@ class FileSystem(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def list(self, path: Optional[str] = None) -> List[str]:
+    def list(self, path: str | None = None) -> list[str]:
         pass
 
     @abc.abstractmethod
-    def glob(self, path: str) -> List[str]:
+    def glob(self, path: str) -> builtins.list[str]:
         pass
 
     @abc.abstractmethod

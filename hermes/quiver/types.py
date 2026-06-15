@@ -1,5 +1,5 @@
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal
 
-IO_TYPE = Union[str, bytes]
-SHAPE_TYPE = Tuple[Optional[int], ...]
+IO_TYPE = str | bytes
+SHAPE_TYPE = tuple[int | None, ...]
 EXPOSED_TYPE = Literal["input", "output"]

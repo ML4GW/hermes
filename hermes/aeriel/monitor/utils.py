@@ -1,7 +1,7 @@
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 from tblib import pickling_support
 
@@ -27,7 +27,7 @@ class ExceptionWrapper(Exception):
 class Throttle:
     target_rate: float
     alpha: float = 0.9
-    condition: Optional[Callable] = None
+    condition: Callable | None = None
     update_every: int = 100
 
     def __post_init__(self):

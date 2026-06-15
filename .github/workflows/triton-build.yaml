@@ -39,7 +39,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        trt-version: ["8.2.3", "8.4.1"]
         include:
         - trt-version: 8.2.3
           triton-tag: 22.02
@@ -47,10 +46,26 @@ jobs:
           triton-tag: 22.07
         - trt-version: 8.5.1
           triton-tag: 22.12
-        - trt-version: 8.6.1.6
-          triton-tag: 24.01
         - trt-version: 8.5.2.2
           triton-tag: 23.01
+        - trt-version: 8.6.1.6
+          triton-tag: 24.01
+        - trt-version: 10.0.1.6
+          triton-tag: 24.05
+        - trt-version: 10.1.0.27
+          triton-tag: 24.06
+        - trt-version: 10.2.0.19
+          triton-tag: 24.07
+        - trt-version: 10.3.0.26
+          triton-tag: 24.08
+        - trt-version: 10.4.0.26
+          triton-tag: 24.09
+        - trt-version: 10.5.0.18
+          triton-tag: 24.10
+        - trt-version: 10.6.0.26
+          triton-tag: 24.11
+        - trt-version: 10.7.0.23
+          triton-tag: 24.12
     steps:
     - name: Free Disk Space (Ubuntu)
       uses: jlumbroso/free-disk-space@main

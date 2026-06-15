@@ -1,6 +1,7 @@
 import inspect
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Callable, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Union
 
 from .exporter import Exporter
 
@@ -61,9 +62,8 @@ def find_exporter(
     else:
         raise TypeError(
             "No registered exporters which map from "
-            "model function type {} to platform {}".format(
-                type(model_fn), model.platform
-            )
+            f"model function type {type(model_fn)} to platform "
+            f"{model.platform}"
         )
 
 

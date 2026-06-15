@@ -64,10 +64,8 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         # specified input tensors
         if len(parameters) != len(input_tensors):
             raise ValueError(
-                "Model function  expects {} inputs, but "
-                "model only expects {} inputs".format(
-                    len(parameters), len(input_tensors)
-                )
+                f"Model function  expects {len(parameters)} inputs, but "
+                f"model only expects {len(input_tensors)} inputs"
             )
 
         if len(parameters) == 1:
@@ -115,7 +113,9 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             shapes = dict(zip(output_names, shapes, strict=True))
         return shapes
 
-    def export(self, model_fn, export_path, verbose=0, **kwargs):
+    def export(
+        self, model_fn, export_path, verbose=0, opset_version=17, **kwargs
+    ):
         inputs, dynamic_axes = [], {}
         for input in self.config.input:
             if input.dims[0] == -1:
@@ -141,6 +141,7 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             input_names=[x.name for x in self.config.input],
             output_names=[x.name for x in self.config.output],
             dynamic_axes=dynamic_axes or None,
+            opset_version=opset_version,
             **kwargs,
         )
 
