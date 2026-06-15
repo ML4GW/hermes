@@ -61,7 +61,7 @@ jobs:
         - trt-version: 10.4.0.26
           triton-tag: 24.09
         - trt-version: 10.5.0.18
-          triton-tag: 24.10
+          triton-tag: "24.10"
         - trt-version: 10.6.0.26
           triton-tag: 24.11
         - trt-version: 10.7.0.23
