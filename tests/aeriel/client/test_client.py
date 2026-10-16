@@ -122,6 +122,8 @@ def test_inference_client(mock1, mock2, num_inputs, num_states, version):
             if (num_inputs + num_states) == 1:
                 if num_states == 1:
                     x = np.random.randn(*states[0][0].shape)
+                    with pytest.raises(ValueError, match="nonzero"):
+                        client.infer(x, request_id=10, sequence_id=0)
                     kwargs = {
                         "sequence_id": 1001,
                         "sequence_start": MagicMock(),

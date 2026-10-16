@@ -1,12 +1,14 @@
 import os
+import socket
 import time
 from queue import Queue
 from tempfile import NamedTemporaryFile
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hermes.aeriel.serve.serve import get_wait, serve
+from hermes.aeriel.serve.serve import _free_ports, get_wait, serve
 
 
 def test_get_wait():
@@ -31,6 +33,42 @@ def test_get_wait():
     ):
         with pytest.raises(TimeoutError):
             wait(timeout=0.1)
+
+
+def test_wait_ignores_other_servers():
+    q = Queue()
+    wait = get_wait(q, server_id="hermes-ours")
+    q.put({"return_code": 1, "message": "Socket already in use"})
+    metadata = SimpleNamespace(name="someone-elses")
+    with patch(
+        "tritonclient.grpc.InferenceServerClient.is_server_live",
+        return_value=True,
+    ):
+        with patch(
+            "tritonclient.grpc.InferenceServerClient.get_server_metadata",
+            return_value=metadata,
+        ):
+            with pytest.raises(ValueError, match="already in use"):
+                wait(timeout=1)
+
+    metadata.name = "hermes-ours"
+    with patch(
+        "tritonclient.grpc.InferenceServerClient.is_server_live",
+        return_value=True,
+    ):
+        with patch(
+            "tritonclient.grpc.InferenceServerClient.get_server_metadata",
+            return_value=metadata,
+        ):
+            wait(timeout=1)
+
+
+def test_free_ports_can_be_bound():
+    ports = _free_ports(3)
+    assert len(set(ports)) == 3
+    for port in ports:
+        with socket.socket() as sock:
+            sock.bind(("", port))
 
 
 @pytest.fixture(params=[None, [0], [3, 4]])
@@ -71,8 +109,9 @@ def execute(instance, cmd, *args, **kwargs):
     return cmd[-1]
 
 
+@pytest.mark.parametrize("free_ports", [False, True])
 def test_singularity_instance_run(
-    gpus, log_file, server_args, container_name, image
+    gpus, log_file, server_args, container_name, image, free_ports
 ):
     args = None if server_args is None else server_args.split()
     ctx = serve(
@@ -82,6 +121,7 @@ def test_singularity_instance_run(
         gpus=gpus,
         server_args=args,
         log_file=log_file,
+        free_ports=free_ports,
     )
 
     if gpus is None:
@@ -110,17 +150,31 @@ def test_singularity_instance_run(
                 )
 
                 # now make sure the wait method on the returned
-                # Instance instance behaves reasonably
+                # Instance instance behaves reasonably, and waits
+                # on this server's gRPC port
+                metadata = SimpleNamespace(name=instance.server_id)
                 with patch(
-                    "tritonclient.grpc.InferenceServerClient.is_server_live",
-                    return_value=True,
-                ):
+                    "tritonclient.grpc.InferenceServerClient"
+                ) as client_patch:
+                    client = client_patch.return_value
+                    client.is_server_live.return_value = True
+                    client.get_server_metadata.return_value = metadata
                     instance.wait()
+                client_patch.assert_called_with(
+                    f"localhost:{instance.grpc_port}"
+                )
 
             # now verify that the appropriate command gets called
             # inside the instance
             cmd = "/opt/tritonserver/bin/tritonserver "
             cmd += "--model-repository /path/to/repo"
+            cmd += f" --id={instance.server_id}"
+            if free_ports:
+                cmd += f" --http-port={instance.http_port}"
+                cmd += f" --grpc-port={instance.grpc_port}"
+                cmd += f" --metrics-port={instance.metrics_port}"
+            else:
+                assert instance.grpc_port == 8001
 
             # TODO: this is doing a bit too much of recreating
             # the internal logic for my taste. How can this

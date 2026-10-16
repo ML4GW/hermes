@@ -114,13 +114,24 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         return shapes
 
     def export(
-        self, model_fn, export_path, verbose=0, opset_version=17, **kwargs
+        self,
+        model_fn,
+        export_path,
+        verbose=0,
+        opset_version=17,
+        dynamo=False,
+        **kwargs,
     ):
         inputs, dynamic_axes = [], {}
         for input in self.config.input:
-            if input.dims[0] == -1:
+            shape = list(input.dims)
+            if shape[0] == -1:
                 dynamic_axes[input.name] = {0: "batch"}
-            inputs.append(self._get_tensor(input.dims))
+                # some torch versions fix dimensions of size 1 when
+                # exporting with dynamo, so give it a batch of 2
+                if dynamo:
+                    shape[0] = 2
+            inputs.append(self._get_tensor(shape))
 
         if len(dynamic_axes) > 0:
             for output in self.config.output:
@@ -131,10 +142,13 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
         else:
             inputs = tuple(inputs)
 
-        # export to a BytesIO object so that we
-        # can copy the bytes to cloud filesystems
-        export_obj = BytesIO()
-        torch.onnx.export(
+        # export to bytes so that we can copy them to cloud filesystems.
+        # Dynamo can't write to a BytesIO in every torch version, so its
+        # exported program is serialized instead. torch 2.9 made dynamo the
+        # default, so it's always passed to keep exports from changing
+        # with the torch version
+        export_obj = None if dynamo else BytesIO()
+        program = torch.onnx.export(
             model_fn,
             inputs,
             export_obj,
@@ -142,10 +156,14 @@ class TorchOnnx(Exporter, metaclass=TorchOnnxMeta):
             output_names=[x.name for x in self.config.output],
             dynamic_axes=dynamic_axes or None,
             opset_version=opset_version,
+            dynamo=dynamo,
             **kwargs,
         )
+        if dynamo:
+            binary = program.model_proto.SerializeToString()
+        else:
+            binary = export_obj.getvalue()
 
-        # write the written bytes and return
-        # the path to which they were written
-        self.fs.write(export_obj.getvalue(), export_path)
+        # write the bytes and return the path to which they were written
+        self.fs.write(binary, export_path)
         return export_path
