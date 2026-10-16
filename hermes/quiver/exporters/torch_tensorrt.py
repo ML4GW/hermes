@@ -79,7 +79,10 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
         output_names: Sequence[str] | None = None,
         use_fp16: bool = False,
         endpoint: str | None = None,
+        dynamo: bool = False,
     ):
+        # `dynamo` picks the exporter for the intermediate ONNX model, as in
+        # TorchOnnx.export.
         if endpoint is None and not _has_trt:
             raise ImportError(
                 "Must have  tensorrt installed to use TorchTensorRT "
@@ -148,6 +151,7 @@ class TorchTensorRT(TorchOnnx, metaclass=TorchTensorRTMeta):
                     version=version,
                     input_shapes=input_shapes,
                     output_names=output_names,
+                    dynamo=dynamo,
                 )
                 onnx_path = repo.fs.join(d, onnx_path)
                 with open(onnx_path, "rb") as f:
