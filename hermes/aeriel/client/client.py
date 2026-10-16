@@ -369,11 +369,13 @@ class InferenceClient:
         # InferenceInputs it will be used to fill with data
         if sequence_id is None and len(self.states) > 0:
             # enforce that we provide a sequence id if
-            # there are any stateful inputs. TODO: should
-            # we do the same if there are any stateful outputs?
-            # Or just states somewhere in the model in general?
+            # there are any stateful inputs. Triton treats 0 as
+            # no sequence, so tritonclient would drop the id and
+            # the start and end flags. TODO: should we do the same
+            # if there are any stateful outputs? Or just states
+            # somewhere in the model in general?
             raise ValueError(
-                "Must provide sequence id for model with states "
+                "Must provide a nonzero sequence id for model with states "
                 f"{[i[0].name() for i in self.states]}"
             )
         elif sequence_id is not None and self.num_states == 0:
@@ -445,8 +447,8 @@ class InferenceClient:
                 values.
             sequence_id:
                 An identifier to associate this request with a particular
-                state on the inference server. Required if the
-                indicated model has any stateful inputs, otherwise
+                state on the inference server. Required, and nonzero, if
+                the indicated model has any stateful inputs, otherwise
                 won't do anything.
             sequence_start:
                 Indicates whether this request is the first in a
