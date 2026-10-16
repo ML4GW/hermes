@@ -1,6 +1,8 @@
 import logging
 import os
+import socket
 import time
+import uuid
 from collections.abc import Iterable
 from contextlib import contextmanager
 from queue import Empty, Queue
@@ -57,13 +59,32 @@ class Timer:
         return elapsed < self.timeout and not self._stopped
 
 
-def get_wait(q: Queue, log_file: str | None = None):
+def _free_ports(num_ports: int) -> list[int]:
+    """Ports that nothing else is listening on right now."""
+    sockets = [socket.socket() for _ in range(num_ports)]
+    try:
+        # hold every socket until all are bound, so the ports differ
+        for sock in sockets:
+            sock.bind(("", 0))
+        return [sock.getsockname()[1] for sock in sockets]
+    finally:
+        for sock in sockets:
+            sock.close()
+
+
+def get_wait(
+    q: Queue,
+    log_file: str | None = None,
+    server_id: str | None = None,
+    grpc_port: int = 8001,
+):
     def wait(
-        endpoint: str = "localhost:8001",
+        endpoint: str | None = None,
         timeout: float | None = None,
         log_interval: float = 10,
     ) -> None:
         logging.info("Waiting for server to come online")
+        endpoint = endpoint or f"localhost:{grpc_port}"
 
         timer = Timer(timeout, log_interval)
         live = False
@@ -72,7 +93,12 @@ def get_wait(q: Queue, log_file: str | None = None):
                 # Re-define the client on each loop
                 # See https://github.com/ML4GW/hermes/issues/71
                 client = triton.InferenceServerClient(endpoint)
-                live = client.is_server_live()
+                # In addition to the server being live, also require it
+                # to have an ID that matches the one the client is expecting.
+                live = client.is_server_live() and (
+                    server_id is None
+                    or client.get_server_metadata().name == server_id
+                )
             except triton.InferenceServerException as exc:
                 logging.debug("Connection attempt failed: %s", exc)
             finally:
@@ -120,6 +146,7 @@ def serve(
     server_args: Iterable[str] | None = None,
     log_file: str | None = None,
     wait: bool = False,
+    free_ports: bool = False,
 ) -> Instance:
     """Context which spins up a Triton container in the background
 
@@ -171,11 +198,18 @@ def serve(
             to Triton coming online, or if the user requires more
             fine-grained control over whether to timeout and raise
             an error if Triton takes too long to come online.
+        free_ports:
+            If `True`, serve on ports that are free when the server
+            starts, rather than Triton's defaults of 8000 (HTTP), 8001
+            (gRPC) and 8002 (metrics), which another server on the
+            node may hold.
     Yields:
         A `spyton.instance.Instance` representing the singularity
             instance running the server, with an additional `wait`
             method included that will hold up the calling thread
-            until the server is online.
+            until the server is online. Its `server_id`, `grpc_port`,
+            `http_port` and `metrics_port` attributes identify the
+            server and where it listens.
     """
 
     if not os.path.isabs(image):
@@ -195,6 +229,17 @@ def serve(
     # create the base triton server command and
     # point it at the model repository
     cmd = f"{TRITON_BINARY} --model-repository {model_repo_dir}"
+
+    # give the server its own unique ID, so that `wait` can tell it
+    # apart from any other server on the same port
+    server_id = f"hermes-{uuid.uuid4().hex}"
+    cmd += f" --id={server_id}"
+    if free_ports:
+        http_port, grpc_port, metrics_port = _free_ports(3)
+        cmd += f" --http-port={http_port} --grpc-port={grpc_port}"
+        cmd += f" --metrics-port={metrics_port}"
+    else:
+        http_port, grpc_port, metrics_port = 8000, 8001, 8002
 
     # add in any additional arguments to the server
     if server_args is not None:
@@ -243,7 +288,11 @@ def serve(
     q = Queue()
     runner = Thread(target=target, args=(q, instance, cmd))
     runner.start()
-    instance.wait = get_wait(q, log_file)
+    instance.wait = get_wait(q, log_file, server_id, grpc_port)
+    instance.server_id = server_id
+    instance.http_port = http_port
+    instance.grpc_port = grpc_port
+    instance.metrics_port = metrics_port
     try:
         if wait:
             instance.wait()
