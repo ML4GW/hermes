@@ -367,7 +367,7 @@ class InferenceClient:
         # now do some checks on the sequence that this input
         # belongs to (if any) and grab or create the corresponding
         # InferenceInputs it will be used to fill with data
-        if sequence_id is None and len(self.states) > 0:
+        if (sequence_id is None or sequence_id == 0) and len(self.states) > 0:
             # enforce that we provide a sequence id if
             # there are any stateful inputs. Triton treats 0 as
             # no sequence, so tritonclient would drop the id and

@@ -6,9 +6,17 @@ import tensorrt as trt
 if TYPE_CHECKING:
     from tritonclient.grpc.model_config_pb2 import ModelConfig
 
-# Minimum GPU compute capability (SM × 10) supported per TRT major version.
-# TRT 10 dropped Volta (SM 7.0); earlier versions are more permissive.
-_TRT_MIN_SM = {8: 35, 9: 53, 10: 75}
+# Minimum GPU compute capability (SM × 10) supported by TRT, keyed by the
+# (major, minor) version from which each applies. TRT 10.0 deprecated Volta
+# (SM 7.0) and 10.5 removed it.
+_TRT_MIN_SM = {(8, 0): 35, (9, 0): 53, (10, 0): 70, (10, 5): 75}
+
+
+def _min_sm(trt_version: str) -> int | None:
+    """The minimum compute capability TRT `trt_version` supports, if known."""
+    version = tuple(int(i) for i in trt_version.split(".")[:2])
+    mins = [sm for since, sm in _TRT_MIN_SM.items() if since <= version]
+    return max(mins, default=None)
 
 
 def _check_gpu_trt_compatibility() -> None:
@@ -24,17 +32,16 @@ def _check_gpu_trt_compatibility() -> None:
     major, minor = torch.cuda.get_device_capability()
     sm = major * 10 + minor
 
-    trt_major = int(trt.__version__.split(".")[0])
-    min_sm = _TRT_MIN_SM.get(trt_major)
+    min_sm = _min_sm(trt.__version__)
     if min_sm is not None and sm < min_sm:
         device = torch.cuda.get_device_name()
         min_major, min_minor = divmod(min_sm, 10)
         raise RuntimeError(
             f"GPU '{device}' has compute capability SM {major}.{minor}, "
             f"which is not supported by TensorRT {trt.__version__}. "
-            f"TensorRT {trt_major}.x requires SM {min_major}.{min_minor} "
-            f"or later. For Volta-class GPUs (V100), use an NVIDIA "
-            f"container that includes TensorRT 9.x."
+            f"It requires SM {min_major}.{min_minor} or later. For "
+            "Volta-class GPUs (V100), use TensorRT 10.4 or earlier, and a "
+            "Triton container with the same version (24.09 or earlier)."
         )
 
 
